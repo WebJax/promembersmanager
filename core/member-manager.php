@@ -488,4 +488,150 @@ class Member_Manager {
         
         return $types[$type] ?? __('Unknown', 'pro-members-manager');
     }
+
+    /**
+     * Get total count of members with optional filtering
+     *
+     * @param array $args Optional. Arguments to filter the count.
+     * @return int|array Member count. If 'group_by' is set, returns array.
+     */
+    public function get_members_count($args = []) {
+        $defaults = [
+            'from_date' => '',
+            'to_date' => '',
+            'member_type' => '',
+            'renewal_type' => '',
+            'group_by' => '' // Options: 'member_type', 'renewal_type', 'both', or empty
+        ];
+
+        $args = wp_parse_args($args, $defaults);
+        
+        // Prepare query params for WC orders
+        $query_args = [
+            'status' => 'completed',
+            'limit' => -1 // Get all orders
+        ];
+        
+        // Add date filters if specified
+        if (!empty($args['from_date']) && !empty($args['to_date'])) {
+            $query_args['date_paid'] = $args['from_date'] . '...' . $args['to_date'];
+        }
+        
+        // Get all completed orders
+        $orders = wc_get_orders($query_args);
+        
+        // If no grouping requested, return simple count
+        if (empty($args['group_by'])) {
+            if (empty($args['member_type']) && empty($args['renewal_type'])) {
+                return count($orders);
+            }
+            
+            // Filter and count
+            $filtered_count = 0;
+            foreach ($orders as $order) {
+                $member_data = $this->prepare_member_data($order);
+                $subscription = $member_data['subscription_details'];
+                
+                // Skip if member_type filter doesn't match
+                if (!empty($args['member_type']) && $subscription['type'] !== $args['member_type']) {
+                    continue;
+                }
+                
+                // Skip if renewal_type filter doesn't match
+                if (!empty($args['renewal_type']) && $subscription['renewal_type'] !== $args['renewal_type']) {
+                    continue;
+                }
+                
+                $filtered_count += $subscription['quantity'];
+            }
+            
+            return $filtered_count;
+        }
+        
+        // Handle grouped counts
+        $counts = [];
+        
+        if ($args['group_by'] === 'member_type') {
+            // Initialize counters for all known member types
+            $counts = [
+                'private' => 0,
+                'pension' => 0,
+                'union' => 0,
+                'unknown' => 0
+            ];
+            
+            foreach ($orders as $order) {
+                $member_data = $this->prepare_member_data($order);
+                $subscription = $member_data['subscription_details'];
+                $type = $subscription['type'];
+                
+                // Skip if renewal_type filter doesn't match
+                if (!empty($args['renewal_type']) && $subscription['renewal_type'] !== $args['renewal_type']) {
+                    continue;
+                }
+                
+                // Increment the appropriate counter
+                if (isset($counts[$type])) {
+                    $counts[$type] += $subscription['quantity'];
+                } else {
+                    $counts['unknown'] += $subscription['quantity'];
+                }
+            }
+        } 
+        elseif ($args['group_by'] === 'renewal_type') {
+            // Count by renewal type
+            $counts = [
+                'auto' => 0,
+                'manual' => 0,
+                'unknown' => 0
+            ];
+            
+            foreach ($orders as $order) {
+                $member_data = $this->prepare_member_data($order);
+                $subscription = $member_data['subscription_details'];
+                $renewal = $subscription['renewal_type'];
+                
+                // Skip if member_type filter doesn't match
+                if (!empty($args['member_type']) && $subscription['type'] !== $args['member_type']) {
+                    continue;
+                }
+                
+                // Increment the appropriate counter
+                if (isset($counts[$renewal])) {
+                    $counts[$renewal] += $subscription['quantity'];
+                } else {
+                    $counts['unknown'] += $subscription['quantity'];
+                }
+            }
+        }
+        elseif ($args['group_by'] === 'both') {
+            // Create a matrix of member_type x renewal_type
+            $counts = [
+                'private' => ['auto' => 0, 'manual' => 0, 'unknown' => 0],
+                'pension' => ['auto' => 0, 'manual' => 0, 'unknown' => 0],
+                'union' => ['auto' => 0, 'manual' => 0, 'unknown' => 0],
+                'unknown' => ['auto' => 0, 'manual' => 0, 'unknown' => 0]
+            ];
+            
+            foreach ($orders as $order) {
+                $member_data = $this->prepare_member_data($order);
+                $subscription = $member_data['subscription_details'];
+                $type = $subscription['type'];
+                $renewal = $subscription['renewal_type'];
+                
+                // Initialize if not set
+                if (!isset($counts[$type])) {
+                    $type = 'unknown';
+                }
+                if (!isset($counts[$type][$renewal])) {
+                    $renewal = 'unknown';
+                }
+                
+                // Increment the appropriate counter
+                $counts[$type][$renewal] += $subscription['quantity'];
+            }
+        }
+        
+        return $counts;
+    }
 }
