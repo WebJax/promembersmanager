@@ -1,125 +1,237 @@
 <?php
 /**
+ * Pro Members Manager
+ *
+ * @package Pro_Members_Manager
+ * @author  Jacob Thygesen
+ * @license GPL-2.0+
+ *
+ * @wordpress-plugin
  * Plugin Name: Pro Members Manager
- * Plugin URI:  https://example.com/pro-members-manager
- * Description: Professional member management system with advanced statistics, CSV exports, and member tracking
+ * Plugin URI:  https://dianalund.dk
+ * Description: Advanced membership management system for organizations
  * Version:     1.0.0
- * Author:      Your Name
- * Author URI:  https://example.com
- * License:     GPL2
- * License URI: https://www.gnu.org/licenses/gpl-2.0.html
+ * Author:      Jacob Thygesen
+ * Author URI:  https://dianalund.dk
  * Text Domain: pro-members-manager
+ * License:     GPL-2.0+
+ * License URI: http://www.gnu.org/licenses/gpl-2.0.txt
  * Domain Path: /languages
- * 
- * Requires at least: 5.8
- * Requires PHP: 7.4
- * WC requires at least: 5.0
- * WC tested up to: 8.0
+ *
+ * This plugin is a complete rewrite of the JxwMembers plugin with improved architecture and functionality.
  */
 
-defined('ABSPATH') || exit;
+// Exit if accessed directly
+if (!defined('ABSPATH')) {
+    exit;
+}
 
-// Define plugin constants
-define('PMM_VERSION', '1.0.0');
-define('PMM_PLUGIN_DIR', plugin_dir_path(__FILE__));
+// Define constants
+define('PMM_PLUGIN_FILE', __FILE__);
+define('PMM_PLUGIN_PATH', plugin_dir_path(__FILE__));
 define('PMM_PLUGIN_URL', plugin_dir_url(__FILE__));
-define('PMM_PLUGIN_BASENAME', plugin_basename(__FILE__));
+define('PMM_PLUGIN_VERSION', '1.0.0');
+define('PMM_PLUGIN_NAME', 'pro-members-manager');
 
-// Autoloader for plugin classes
-spl_autoload_register(function ($class) {
-    $prefix = 'ProMembersManager\\';
-    $base_dir = PMM_PLUGIN_DIR . 'includes/';
+// Include the autoloader
+require_once PMM_PLUGIN_PATH . 'includes/class-autoloader.php';
 
-    $len = strlen($prefix);
-    if (strncmp($prefix, $class, $len) !== 0) {
-        return;
-    }
-
-    $relative_class = substr($class, $len);
-    $file = $base_dir . str_replace('\\', '/', $relative_class) . '.php';
-
-    if (file_exists($file)) {
-        require $file;
-    }
-});
-
-// Main plugin class
-final class Pro_Members_Manager {
-    private static $instance = null;
+/**
+ * Initialize the plugin
+ *
+ * @since 1.0.0
+ */
+function promembersmanager_init() {
+    // Register activation and deactivation hooks
+    register_activation_hook(PMM_PLUGIN_FILE, 'promembersmanager_activate');
+    register_deactivation_hook(PMM_PLUGIN_FILE, 'promembersmanager_deactivate');
     
-    public static function instance() {
-        if (is_null(self::$instance)) {
-            self::$instance = new self();
-        }
-        return self::$instance;
+    // Initialize autoloader
+    $autoloader = new ProMembersManager\Autoloader();
+    $autoloader->register();
+    
+    // Initialize core components
+    $database = new ProMembersManager\Core\Database();
+    $database->init();
+    
+    // Initialize admin
+    if (is_admin()) {
+        $admin_menu = new ProMembersManager\Admin\Admin_Menu();
+        $admin_menu->init();
     }
-
-    private function __construct() {
-        $this->init_hooks();
+    
+    // Initialize frontend
+    if (!is_admin()) {
+        $member_list = new ProMembersManager\Frontend\Member_List();
+        $member_list->init();
     }
+    
+    // Initialize API Handler
+    $api_handler = new ProMembersManager\Core\API_Handler();
+    $api_handler->init();
+    
+    // Register assets
+    add_action('wp_enqueue_scripts', 'promembersmanager_enqueue_frontend_assets');
+    add_action('admin_enqueue_scripts', 'promembersmanager_enqueue_admin_assets');
+    
+    // Register AJAX handlers
+    add_action('wp_ajax_pmm_export_csv', array(new ProMembersManager\Core\CSV_Handler(), 'export_csv'));
+    add_action('wp_ajax_pmm_create_member', array(new ProMembersManager\Core\Member_Manager(), 'create_member'));
+    add_action('wp_ajax_pmm_edit_member', array(new ProMembersManager\Core\Member_Manager(), 'edit_member'));
+    add_action('wp_ajax_pmm_update_member', array(new ProMembersManager\Core\Member_Manager(), 'update_member'));
+    add_action('wp_ajax_pmm_delete_member', array(new ProMembersManager\Core\Member_Manager(), 'delete_member'));
+    
+    // Add shortcodes
+    add_shortcode('pro_members_list', array(new ProMembersManager\Frontend\Member_List(), 'render_shortcode'));
+}
 
-    private function init_hooks() {
-        // Check dependencies
-        add_action('plugins_loaded', [$this, 'check_dependencies']);
+/**
+ * Plugin activation hook
+ *
+ * @since 1.0.0
+ */
+function promembersmanager_activate() {
+    // Create database tables
+    $database = new ProMembersManager\Core\Database();
+    $database->create_tables();
+    
+    // Add capabilities
+    promembersmanager_add_capabilities();
+    
+    // Flush rewrite rules
+    flush_rewrite_rules();
+}
+
+/**
+ * Plugin deactivation hook
+ *
+ * @since 1.0.0
+ */
+function promembersmanager_deactivate() {
+    // Remove capabilities
+    promembersmanager_remove_capabilities();
+    
+    // Flush rewrite rules
+    flush_rewrite_rules();
+}
+
+/**
+ * Add custom capabilities
+ *
+ * @since 1.0.0
+ */
+function promembersmanager_add_capabilities() {
+    global $wp_roles;
+    
+    if (!isset($wp_roles)) {
+        $wp_roles = new WP_Roles();
+    }
+    
+    // Subscriber capabilities for reference
+    $subscriber = $wp_roles->get_role('subscriber');
+    
+    // Create board member role
+    if (!get_role('boardmember')) {
+        $wp_roles->add_role('boardmember', __('Board Member', 'pro-members-manager'), $subscriber->capabilities);
+        $wp_roles->add_cap('boardmember', 'view_members');
+        $wp_roles->add_cap('administrator', 'view_members');
+        $wp_roles->add_cap('administrator', 'manage_members');
+    }
+}
+
+/**
+ * Remove custom capabilities
+ *
+ * @since 1.0.0
+ */
+function promembersmanager_remove_capabilities() {
+    global $wp_roles;
+    
+    if (!isset($wp_roles)) {
+        $wp_roles = new WP_Roles();
+    }
+    
+    // Remove board member role
+    $wp_roles->remove_role('boardmember');
+    
+    // Remove capabilities from admin
+    $wp_roles->remove_cap('administrator', 'view_members');
+    $wp_roles->remove_cap('administrator', 'manage_members');
+}
+
+/**
+ * Enqueue frontend assets
+ *
+ * @since 1.0.0
+ */
+function promembersmanager_enqueue_frontend_assets() {
+    wp_enqueue_style(
+        'pmm-frontend-styles',
+        PMM_PLUGIN_URL . 'assets/css/frontend-styles.css',
+        array(),
+        PMM_PLUGIN_VERSION
+    );
+    
+    wp_enqueue_script(
+        'pmm-frontend-scripts',
+        PMM_PLUGIN_URL . 'assets/js/frontend-scripts.js',
+        array('jquery'),
+        PMM_PLUGIN_VERSION,
+        true
+    );
+    
+    wp_localize_script(
+        'pmm-frontend-scripts',
+        'pmmVars',
+        array(
+            'ajaxUrl' => admin_url('admin-ajax.php'),
+            'nonce' => wp_create_nonce('pmm_frontend_nonce')
+        )
+    );
+}
+
+/**
+ * Enqueue admin assets
+ *
+ * @since 1.0.0
+ */
+function promembersmanager_enqueue_admin_assets() {
+    $screen = get_current_screen();
+    
+    // Only load on plugin admin pages
+    if ($screen && strpos($screen->id, 'pro-members-manager') !== false) {
+        wp_enqueue_style(
+            'pmm-admin-styles',
+            PMM_PLUGIN_URL . 'assets/css/admin-styles.css',
+            array(),
+            PMM_PLUGIN_VERSION
+        );
         
-        // Initialize plugin components
-        add_action('plugins_loaded', [$this, 'init_plugin']);
+        wp_enqueue_script(
+            'pmm-admin-scripts',
+            PMM_PLUGIN_URL . 'assets/js/admin-scripts.js',
+            array('jquery'),
+            PMM_PLUGIN_VERSION,
+            true
+        );
         
-        // Register activation/deactivation hooks
-        register_activation_hook(__FILE__, [$this, 'activate']);
-        register_deactivation_hook(__FILE__, [$this, 'deactivate']);
-    }
-
-    public function check_dependencies() {
-        if (!class_exists('WooCommerce')) {
-            add_action('admin_notices', function() {
-                ?>
-                <div class="notice notice-error">
-                    <p><?php _e('Pro Members Manager requires WooCommerce to be installed and activated.', 'pro-members-manager'); ?></p>
-                </div>
-                <?php
-            });
-            return;
-        }
-    }
-
-    public function init_plugin() {
-        // Load text domain
-        load_plugin_textdomain('pro-members-manager', false, dirname(PMM_PLUGIN_BASENAME) . '/languages');
-
-        // Initialize components
-        new \ProMembersManager\Admin\Admin_Menu();
-        new \ProMembersManager\Frontend\Member_List();
-        new \ProMembersManager\Core\Member_Manager();
-        new \ProMembersManager\Core\CSV_Handler();
-        new \ProMembersManager\Core\API_Handler();
-        new \ProMembersManager\Core\Stats_Manager();
-    }
-
-    public function activate() {
-        // Create necessary database tables and options
-        \ProMembersManager\Core\Database::create_tables();
-        
-        // Add custom capabilities
-        \ProMembersManager\Core\Capabilities::add_caps();
-        
-        // Flush rewrite rules
-        flush_rewrite_rules();
-    }
-
-    public function deactivate() {
-        // Clean up plugin data if needed
-        \ProMembersManager\Core\Capabilities::remove_caps();
-        
-        // Flush rewrite rules
-        flush_rewrite_rules();
+        wp_localize_script(
+            'pmm-admin-scripts',
+            'pmmAdminVars',
+            array(
+                'ajaxUrl' => admin_url('admin-ajax.php'),
+                'nonce' => wp_create_nonce('pmm_admin_nonce'),
+                'i18n' => array(
+                    'confirmDelete' => __('Are you sure you want to delete this member?', 'pro-members-manager'),
+                    'confirmCancel' => __('Are you sure you want to cancel this membership?', 'pro-members-manager'),
+                    'processingRequest' => __('Processing request...', 'pro-members-manager'),
+                    'success' => __('Success!', 'pro-members-manager'),
+                    'error' => __('Error:', 'pro-members-manager')
+                )
+            )
+        );
     }
 }
 
 // Initialize the plugin
-function PMM() {
-    return Pro_Members_Manager::instance();
-}
-
-// Start the plugin
-PMM();
+add_action('plugins_loaded', 'promembersmanager_init');
