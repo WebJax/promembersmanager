@@ -53,7 +53,7 @@ switch ($tab) {
 
 // Get members and count
 $members = $member_manager->get_members($args);
-$total_members = $member_manager->count_members($args);
+$total_members = count($members);
 $total_pages = ceil($total_members / $per_page);
 
 // Get statistics for display

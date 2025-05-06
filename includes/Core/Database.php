@@ -29,7 +29,9 @@ class Database {
         global $wpdb;
         
         $charset_collate = $wpdb->get_charset_collate();
-        
+
+
+        // Define and create the members table name
         $members_table = $wpdb->prefix . 'pmm_membership_metadata';
         
         $sql = "CREATE TABLE $members_table (
@@ -53,6 +55,18 @@ class Database {
         ) $charset_collate;";
         
         require_once(ABSPATH . 'wp-admin/includes/upgrade.php');
+        dbDelta($sql);
+
+        // Define and create dayly statistics table name
+        $dayly_stats_table = $wpdb->prefix . 'pmm_dayly_statistics';
+        $sql = "CREATE TABLE $dayly_stats_table (
+            id mediumint(9) NOT NULL AUTO_INCREMENT,
+            date datetime NOT NULL,
+            private_memberships int(11) NOT NULL,
+            union_memberships int(11) NOT NULL,
+            PRIMARY KEY  (id),
+            UNIQUE KEY date (date)
+        ) $charset_collate;";
         dbDelta($sql);
     }
 
@@ -422,5 +436,125 @@ class Database {
             'count_unionmemberships_in_dianalund' => $count_unionmemberships_in_dianalund,
             'count_unionmemberships_outside_dianalund' => $count_unionmemberships_outside_dianalund,
         );
+    }
+
+    /**
+     * Get daily statistics
+     * 
+     * @param string $date Date in 'Y-m-d' format
+     * @return array Daily statistics
+     */
+    public function get_daily_statistics($date) {
+        global $wpdb;
+        
+        $dayly_stats_table = $wpdb->prefix . 'pmm_dayly_statistics';
+        
+        $sql = $wpdb->prepare(
+            "SELECT * FROM $dayly_stats_table WHERE date = %s",
+            $date
+        );
+        
+        return $wpdb->get_row($sql, ARRAY_A);
+    }
+
+    /**
+     * Record daily statistics
+     * 
+     * @param array $data Daily statistics data
+     * @return bool True on success, false on failure
+     */
+    static function record_daily_stats() {
+        $stats = Database::get_member_statistics();
+
+        global $wpdb;
+        
+        $dayly_stats_table = $wpdb->prefix . 'pmm_dayly_statistics';
+        
+        $data['date'] = current_time('Y-m-d');
+        $data = array(
+            'private_memberships' => $stats['count_privatememberships'],
+            'union_memberships' => $stats['count_unionmemberships'],
+        );
+        
+        $inserted = $wpdb->insert(
+            $dayly_stats_table,
+            $data,
+            array(
+                '%s', // date
+                '%d', // private_memberships
+                '%d', // union_memberships
+            )
+        );
+        
+        return ($inserted !== false);
+    }
+
+    static function get_membership_growth($period, $start_date, $end_date) {
+        global $wpdb;
+        
+        $dayly_stats_table = $wpdb->prefix . 'pmm_dayly_statistics';
+        
+        $sql = $wpdb->prepare(
+            "SELECT date, private_memberships, union_memberships FROM $dayly_stats_table 
+            WHERE date BETWEEN %s AND %s",
+            $start_date, $end_date
+        );
+        
+        $result = $wpdb->get_results($sql, ARRAY_A);
+
+        // Calculate growth
+        $growth = array();
+        foreach ($result as $row) {
+            $date = $row['date'];
+            $private_memberships = (int) $row['private_memberships'];
+            $union_memberships = (int) $row['union_memberships'];
+
+            if (!isset($growth[$date])) {
+                $growth[$date] = array(
+                    'private_memberships' => 0,
+                    'union_memberships' => 0,
+                );
+            }
+
+            $growth[$date]['private_memberships'] += $private_memberships;
+            $growth[$date]['union_memberships'] += $union_memberships;
+        }
+        // Calculate periods monthly or weekly or daily
+        $periods = array();
+        foreach ($growth as $date => $data) {
+            if ($period == 'monthly') {
+                $month = date('Y-m', strtotime($date));
+                if (!isset($periods[$month])) {
+                    $periods[$month] = array(
+                        'private_memberships' => 0,
+                        'union_memberships' => 0,
+                    );
+                }
+                $periods[$month]['private_memberships'] += $data['private_memberships'];
+                $periods[$month]['union_memberships'] += $data['union_memberships'];
+            } elseif ($period == 'weekly') {
+                $week = date('oW', strtotime($date));
+                if (!isset($periods[$week])) {
+                    $periods[$week] = array(
+                        'private_memberships' => 0,
+                        'union_memberships' => 0,
+                    );
+                }
+                $periods[$week]['private_memberships'] += $data['private_memberships'];
+                $periods[$week]['union_memberships'] += $data['union_memberships'];
+            } else {
+                // Daily
+                if (!isset($periods[$date])) {
+                    $periods[$date] = array(
+                        'private_memberships' => 0,
+                        'union_memberships' => 0,
+                    );
+                }
+                $periods[$date]['private_memberships'] += $data['private_memberships'];
+                $periods[$date]['union_memberships'] += $data['union_memberships'];
+            }
+        }
+        // Return the growth data
+        return $periods;
     }
 }

@@ -83,7 +83,7 @@ class Admin_Menu {
             'pmm-admin-styles',
             PMM_PLUGIN_URL . 'assets/css/admin-styles.css',
             [],
-            PMM_VERSION
+            PMM_PLUGIN_VERSION
         );
         
         // Enqueue Chart.js
@@ -100,7 +100,7 @@ class Admin_Menu {
             'pmm-admin-scripts',
             PMM_PLUGIN_URL . 'assets/js/admin-scripts.js',
             ['jquery', 'chartjs'],
-            PMM_VERSION,
+            PMM_PLUGIN_VERSION,
             true
         );
         
@@ -124,7 +124,7 @@ class Admin_Menu {
         $tab = isset($_GET['tab']) ? sanitize_text_field($_GET['tab']) : 'all';
         
         // Include view
-        include_once PMM_PLUGIN_DIR . 'includes/Admin/views/members-page.php';
+        include_once PMM_PLUGIN_PATH . 'includes/Admin/views/members-page.php';
     }
     
     /**
@@ -136,7 +136,7 @@ class Admin_Menu {
         $to_date = isset($_GET['to_date']) ? sanitize_text_field($_GET['to_date']) : date('Y-m-d');
         
         // Include view
-        include_once PMM_PLUGIN_DIR . 'includes/Admin/views/statistics-page.php';
+        include_once PMM_PLUGIN_PATH . 'includes/Admin/views/statistics-page.php';
     }
     
     /**
@@ -148,7 +148,7 @@ class Admin_Menu {
         $to_date = isset($_GET['to_date']) ? sanitize_text_field($_GET['to_date']) : date('Y-m-d');
         
         // Include view
-        include_once PMM_PLUGIN_DIR . 'includes/Admin/views/export-page.php';
+        include_once PMM_PLUGIN_PATH . 'includes/Admin/views/export-page.php';
     }
     
     /**
@@ -158,6 +158,6 @@ class Admin_Menu {
         $active_tab = isset($_GET['tab']) ? sanitize_text_field($_GET['tab']) : 'general';
         
         // Include view
-        include_once PMM_PLUGIN_DIR . 'includes/Admin/views/settings-page.php';
+        include_once PMM_PLUGIN_PATH . 'includes/Admin/views/settings-page.php';
     }
 }

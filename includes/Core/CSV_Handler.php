@@ -166,6 +166,30 @@ class CSV_Handler {
             wp_send_json_error(['message' => __('Failed to generate CSV file.', 'pro-members-manager')]);
         }
     }
+
+    /**
+     * Generate CSV for stats
+     * 
+     * @param string $type The type of report to generate
+     * @return string|false Path to the generated file or false on failure
+     */
+    public function generate_csv($headers, $data, $filename) {
+        // Set headers
+        header('Content-Type: text/csv; charset=utf-8');
+        header('Content-Disposition: attachment; filename=' . $filename);
+        
+        $output = fopen('php://output', 'w');
+        
+        // Add BOM for Excel UTF-8 compatibility
+        fputs($output, "\xEF\xBB\xBF");
+        // Headers
+        fputcsv($output, $headers, ';');
+        foreach ($data as $row) {
+            fputcsv($output, $row, ';');
+        }
+        fclose($output);
+        exit;
+    }
     
     /**
      * Generate CSV file based on type
@@ -197,10 +221,10 @@ class CSV_Handler {
         }
         $filename .= '-' . date('Y-m-d') . '.csv';
         
-        $file_path = PMM_PLUGIN_DIR . 'exports/' . $filename;
+        $file_path = PMM_PLUGIN_PATH . 'exports/' . $filename;
         
         // Ensure exports directory exists
-        wp_mkdir_p(PMM_PLUGIN_DIR . 'exports');
+        wp_mkdir_p(PMM_PLUGIN_PATH . 'exports');
         
         $output = fopen($file_path, 'w');
         

@@ -363,7 +363,7 @@ class Member_Manager {
         $stats = $this->get_member_statistics($members);
         
         // Include template
-        include PMM_PLUGIN_DIR . 'templates/member-list.php';
+        include PMM_PLUGIN_PATH . 'templates/member-list.php';
     }
 
     public function get_member_statistics($members) {

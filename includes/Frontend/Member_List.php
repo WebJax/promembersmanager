@@ -39,7 +39,7 @@ class Member_List {
                 'pmm-frontend-styles',
                 PMM_PLUGIN_URL . 'assets/css/frontend-styles.css',
                 [],
-                PMM_VERSION
+                PMM_PLUGIN_VERSION
             );
             
             // Enqueue Chart.js for statistics
@@ -58,7 +58,7 @@ class Member_List {
                 'pmm-frontend-scripts',
                 PMM_PLUGIN_URL . 'assets/js/frontend-scripts.js',
                 ['jquery'],
-                PMM_VERSION,
+                PMM_PLUGIN_VERSION,
                 true
             );
             
@@ -115,7 +115,7 @@ class Member_List {
         $members = $member_manager->get_members($args);
         
         // Include the template file
-        include PMM_PLUGIN_DIR . 'templates/member-list-shortcode.php';
+        include PMM_PLUGIN_PATH . 'templates/member-list-shortcode.php';
         
         return ob_get_clean();
     }
@@ -150,7 +150,7 @@ class Member_List {
         $stats = $stats_manager->get_stats();
         
         // Include the template file
-        include PMM_PLUGIN_DIR . 'templates/member-stats-shortcode.php';
+        include PMM_PLUGIN_PATH . 'templates/member-stats-shortcode.php';
         
         return ob_get_clean();
     }

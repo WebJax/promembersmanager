@@ -57,18 +57,15 @@ function promembersmanager_init() {
     // Initialize admin
     if (is_admin()) {
         $admin_menu = new ProMembersManager\Admin\Admin_Menu();
-        $admin_menu->init();
     }
     
     // Initialize frontend
     if (!is_admin()) {
         $member_list = new ProMembersManager\Frontend\Member_List();
-        $member_list->init();
     }
     
     // Initialize API Handler
     $api_handler = new ProMembersManager\Core\API_Handler();
-    $api_handler->init();
     
     // Register assets
     add_action('wp_enqueue_scripts', 'promembersmanager_enqueue_frontend_assets');
