@@ -54,20 +54,14 @@ class Database {
         require_once(ABSPATH . 'wp-admin/includes/upgrade.php');
         dbDelta($sql);
         
-        // Create daily stats table
-        $sql = "CREATE TABLE IF NOT EXISTS {$wpdb->prefix}pmm_daily_stats (
+        // Create daily stats table  
+        $sql = "CREATE TABLE IF NOT EXISTS {$wpdb->prefix}pmm_dayly_statistics (
             id mediumint(9) NOT NULL AUTO_INCREMENT,
-            stat_date date NOT NULL,
-            total_members int(11) DEFAULT 0,
-            private_members int(11) DEFAULT 0,
-            pension_members int(11) DEFAULT 0,
-            union_members int(11) DEFAULT 0,
-            auto_renewals int(11) DEFAULT 0,
-            manual_renewals int(11) DEFAULT 0,
-            new_members int(11) DEFAULT 0,
-            created_at datetime DEFAULT CURRENT_TIMESTAMP,
+            date datetime NOT NULL,
+            private_memberships int(11) NOT NULL,
+            union_memberships int(11) NOT NULL,
             PRIMARY KEY (id),
-            UNIQUE KEY stat_date (stat_date)
+            UNIQUE KEY date (date)
         ) $charset_collate;";
         
         dbDelta($sql);
@@ -324,7 +318,7 @@ class Database {
      * @param array $args Optional. Query arguments.
      * @return array Member statistics
      */
-    public function get_member_statistics($args = array()) {
+    static function get_member_statistics($args = array()) {
         global $wpdb;
         
         $defaults = array(
@@ -476,8 +470,8 @@ class Database {
         
         $dayly_stats_table = $wpdb->prefix . 'pmm_dayly_statistics';
         
-        $data['date'] = current_time('Y-m-d');
         $data = array(
+            'date' => current_time('Y-m-d'),
             'private_memberships' => $stats['count_privatememberships'],
             'union_memberships' => $stats['count_unionmemberships'],
         );
