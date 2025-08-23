@@ -20,6 +20,12 @@ class Member_Manager {
         ]
     ];
 
+    // Non-membership products to exclude from statistics
+    private $excluded_products = [
+        36620, // Fællesspisning - Voksen
+        36859  // Byfest Spisebillet
+    ];
+
     public function __construct() {
         global $wpdb;
         $this->db = $wpdb;
@@ -55,14 +61,20 @@ class Member_Manager {
         $orders = wc_get_orders([
             'date_paid' => $args['from_date'] . '...' . $args['to_date'],
             'status' => 'completed',
+            'type' => 'shop_order', // Explicitly specify order type to exclude refunds
             'limit' => $args['per_page'],
             'page' => $args['page']
         ]);
 
         $members = [];
         foreach ($orders as $order) {
-            // Get member data
-            $member = $this->prepare_member_data($order);
+            try {
+                // Get member data - skip if it's a refund or unsupported object
+                $member = $this->prepare_member_data($order);
+            } catch (\Exception $e) {
+                // Skip this order (likely a refund or invalid object)
+                continue;
+            }
             
             // Filter by member type if specified
             if (!empty($args['member_type']) && $member['type'] !== $args['member_type']) {
@@ -86,6 +98,16 @@ class Member_Manager {
     private function prepare_member_data($order) {
         if (!$order || !is_object($order)) {
             throw new \Exception('Invalid order object');
+        }
+        
+        // Check if this is a refund object - skip it as we only want actual orders
+        if (is_a($order, 'Automattic\WooCommerce\Admin\Overrides\OrderRefund') || $order->get_type() === 'shop_order_refund') {
+            throw new \Exception('Refund objects are not supported');
+        }
+        
+        // Check if this is a proper WC_Order object
+        if (!method_exists($order, 'get_formatted_billing_full_name')) {
+            throw new \Exception('Order object does not support required billing methods');
         }
         
         $user_id = $order->get_user_id();
@@ -135,20 +157,36 @@ class Member_Manager {
                 return $details;
             }
             
+            $has_membership_product = false;
+            
             foreach ($items as $item) {
                 $product_id = intval($item->get_product_id());
                 if ($product_id > 0) {
+                    // Skip excluded products (events, meals, etc.)
+                    if (in_array($product_id, $this->excluded_products)) {
+                        continue;
+                    }
+                    
+                    $has_membership_product = true;
                     $details = [
                         'product_id' => $product_id,
                         'quantity' => intval($item->get_quantity()) ?: 1,
                         'type' => $this->get_member_type($product_id),
                         'renewal_type' => $this->get_renewal_type($product_id)
                     ];
-                    break; // Use first valid item
+                    break; // Use first valid membership item
                 }
             }
+            
+            // If order only contains excluded products, throw exception to skip this order
+            if (!$has_membership_product) {
+                throw new \Exception('Order contains only excluded products');
+            }
+            
         } catch (\Exception $e) {
             error_log('Pro Members Manager - Error getting subscription details: ' . $e->getMessage());
+            // Re-throw to let prepare_member_data handle it
+            throw $e;
         }
         
         return $details;
@@ -164,7 +202,7 @@ class Member_Manager {
     }
 
     private function get_renewal_type($product_id) {
-        foreach ($this->member_types as $products) {
+        foreach ($this->member_types as $type => $products) {
             if ($product_id === $products['auto']) {
                 return 'auto';
             } elseif ($product_id === $products['manual']) {
@@ -191,7 +229,11 @@ class Member_Manager {
             wp_send_json_error(['message' => __('Order not found.', 'pro-members-manager')]);
         }
 
-        $member = $this->prepare_member_data($order);
+        try {
+            $member = $this->prepare_member_data($order);
+        } catch (\Exception $e) {
+            wp_send_json_error(['message' => __('Invalid order type or data.', 'pro-members-manager')]);
+        }
         wp_send_json_success(['member' => $member]);
     }
 
@@ -548,6 +590,7 @@ class Member_Manager {
         // Prepare query params for WC orders
         $query_args = [
             'status' => 'completed',
+            'type' => 'shop_order', // Explicitly specify order type to exclude refunds
             'limit' => -1 // Get all orders
         ];
         
@@ -571,14 +614,15 @@ class Member_Manager {
         
         // If no grouping requested, return simple count
         if (empty($args['group_by'])) {
-            if (empty($args['member_type']) && empty($args['renewal_type'])) {
-                return count($orders);
-            }
-            
-            // Filter and count
+            // Always filter and count valid membership orders
             $filtered_count = 0;
             foreach ($orders as $order) {
-                $member_data = $this->prepare_member_data($order);
+                try {
+                    $member_data = $this->prepare_member_data($order);
+                } catch (\Exception $e) {
+                    // Skip this order (likely a refund or invalid object)
+                    continue;
+                }
                 $subscription = $member_data['subscription_details'];
                 
                 // Skip if member_type filter doesn't match
@@ -586,14 +630,13 @@ class Member_Manager {
                     continue;
                 }
                 
-                // Skip if renewal_type filter doesn't match
+                // Skip if renewal_type filter doesn't match  
                 if (!empty($args['renewal_type']) && $subscription['renewal_type'] !== $args['renewal_type']) {
                     continue;
                 }
                 
                 $filtered_count += $subscription['quantity'];
             }
-            
             return $filtered_count;
         }
         
@@ -610,7 +653,12 @@ class Member_Manager {
             ];
             
             foreach ($orders as $order) {
-                $member_data = $this->prepare_member_data($order);
+                try {
+                    $member_data = $this->prepare_member_data($order);
+                } catch (\Exception $e) {
+                    // Skip this order (likely a refund or invalid object)
+                    continue;
+                }
                 $subscription = $member_data['subscription_details'];
                 $type = $subscription['type'];
                 
@@ -636,7 +684,12 @@ class Member_Manager {
             ];
             
             foreach ($orders as $order) {
-                $member_data = $this->prepare_member_data($order);
+                try {
+                    $member_data = $this->prepare_member_data($order);
+                } catch (\Exception $e) {
+                    // Skip this order (likely a refund or invalid object)
+                    continue;
+                }
                 $subscription = $member_data['subscription_details'];
                 $renewal = $subscription['renewal_type'];
                 

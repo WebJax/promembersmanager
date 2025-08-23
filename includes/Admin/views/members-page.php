@@ -53,7 +53,16 @@ switch ($tab) {
 
 // Get members and count
 $members = $member_manager->get_members($args);
-$total_members = count($members);
+
+// Get total count properly (not just current page)
+$count_args = [
+    'from_date' => $from_date,
+    'to_date' => $to_date
+];
+if ($tab === 'dianalund') {
+    $count_args['postcode'] = '4293';
+}
+$total_members = $member_manager->get_members_count($count_args);
 $total_pages = ceil($total_members / $per_page);
 
 // Get statistics for display

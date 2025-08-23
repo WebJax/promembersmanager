@@ -20,8 +20,8 @@ try {
     $member_manager = new ProMembersManager\Core\Member_Manager();
     $database = new ProMembersManager\Core\Database();
 
-    // Get date range from URL or set defaults
-    $from_date = isset($_GET['from_date']) ? sanitize_text_field($_GET['from_date']) : date('Y-m-d', strtotime('-1 month'));
+    // Get date range from URL or set defaults (1 year like members page)
+    $from_date = isset($_GET['from_date']) ? sanitize_text_field($_GET['from_date']) : date('Y-m-d', strtotime('-1 year'));
     $to_date = isset($_GET['to_date']) ? sanitize_text_field($_GET['to_date']) : date('Y-m-d');
     $member_type = isset($_GET['member_type']) ? sanitize_text_field($_GET['member_type']) : '';
 
@@ -32,7 +32,11 @@ try {
     ];
 
     $daily_stats = $database->get_member_statistics($stats_args);
-    $member_counts = $member_manager->get_members_count(['group_by' => 'both']);
+    $member_counts = $member_manager->get_members_count([
+        'group_by' => 'both',
+        'from_date' => $from_date,
+        'to_date' => $to_date
+    ]);
 
 } catch (Exception $e) {
     echo '<div class="notice notice-error"><p>' . esc_html($e->getMessage()) . '</p></div>';

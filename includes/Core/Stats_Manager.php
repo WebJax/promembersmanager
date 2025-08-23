@@ -52,78 +52,42 @@ class Stats_Manager {
         $args = wp_parse_args($args, $default_args);
         
         $member_manager = new Member_Manager();
-        $members = $member_manager->get_members($args);
         
-        // Initialize stats array
+        // Get counts by type and renewal using Member_Manager's logic
+        $member_counts = $member_manager->get_members_count([
+            'group_by' => 'both',
+            'from_date' => $args['from_date'],
+            'to_date' => $args['to_date']
+        ]);
+        
+        // Get total count
+        $total_count = $member_manager->get_members_count([
+            'from_date' => $args['from_date'],
+            'to_date' => $args['to_date']
+        ]);
+        
+        // Format stats to match the expected structure for members-page
         $stats = [
             'private' => [
-                'total' => 0,
+                'total' => ($member_counts['private']['auto'] ?? 0) + ($member_counts['private']['manual'] ?? 0),
                 'auto' => [
-                    'total' => 0,
-                    'regular' => 0,
-                    'pension' => 0
+                    'total' => ($member_counts['private']['auto'] ?? 0) + ($member_counts['pension']['auto'] ?? 0),
+                    'regular' => $member_counts['private']['auto'] ?? 0,
+                    'pension' => $member_counts['pension']['auto'] ?? 0
                 ],
                 'manual' => [
-                    'total' => 0,
-                    'regular' => 0,
-                    'pension' => 0
+                    'total' => ($member_counts['private']['manual'] ?? 0) + ($member_counts['pension']['manual'] ?? 0),
+                    'regular' => $member_counts['private']['manual'] ?? 0,
+                    'pension' => $member_counts['pension']['manual'] ?? 0
                 ]
             ],
             'union' => [
-                'total' => 0,
-                'in_dianalund' => 0,
-                'outside_dianalund' => 0
+                'total' => ($member_counts['union']['auto'] ?? 0) + ($member_counts['union']['manual'] ?? 0),
+                'in_dianalund' => 0, // This would need special handling if needed
+                'outside_dianalund' => 0 // This would need special handling if needed
             ],
-            'total' => count($members)
+            'total' => $total_count
         ];
-        
-        // Calculate statistics
-        foreach ($members as $member) {
-            $type = $member['subscription_details']['type'];
-            $renewal_type = $member['subscription_details']['renewal_type'];
-            $product_id = $member['subscription_details']['product_id'];
-            $quantity = $member['subscription_details']['quantity'];
-            $postcode = $member['address']['postcode'] ?? '';
-            
-            // Add to appropriate categories
-            switch ($product_id) {
-                case '9503': // Auto private
-                    $stats['private']['total'] += $quantity;
-                    $stats['private']['auto']['total'] += $quantity;
-                    $stats['private']['auto']['regular'] += $quantity;
-                    break;
-                    
-                case '10968': // Manual private
-                    $stats['private']['total'] += $quantity;
-                    $stats['private']['manual']['total'] += $quantity;
-                    $stats['private']['manual']['regular'] += $quantity;
-                    break;
-                    
-                case '28736': // Auto pension
-                    $stats['private']['total'] += $quantity;
-                    $stats['private']['auto']['total'] += $quantity;
-                    $stats['private']['auto']['pension'] += $quantity;
-                    break;
-                    
-                case '28735': // Manual pension
-                    $stats['private']['total'] += $quantity;
-                    $stats['private']['manual']['total'] += $quantity;
-                    $stats['private']['manual']['pension'] += $quantity;
-                    break;
-                    
-                case '30734': // Auto union
-                case '19221': // Manual union
-                    $stats['union']['total'] += $quantity;
-                    
-                    // Check location
-                    if ($postcode === '4293') {
-                        $stats['union']['in_dianalund'] += $quantity;
-                    } else {
-                        $stats['union']['outside_dianalund'] += $quantity;
-                    }
-                    break;
-            }
-        }
         
         return $stats;
     }

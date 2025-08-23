@@ -135,7 +135,7 @@ class Admin_Menu {
         $from_date = isset($_GET['from_date']) ? sanitize_text_field($_GET['from_date']) : date('Y-m-d', strtotime('-1 year'));
         $to_date = isset($_GET['to_date']) ? sanitize_text_field($_GET['to_date']) : date('Y-m-d');
         
-        // Include view
+        // Include view directly (don't return, let it echo)
         include_once PMM_PLUGIN_PATH . 'includes/Admin/views/statistics-page.php';
     }
     
