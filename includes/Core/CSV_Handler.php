@@ -7,11 +7,11 @@ defined('ABSPATH') || exit;
  * Handles CSV exports and imports for the Pro Members Manager plugin
  */
 class CSV_Handler {
-    private $member_manager;
+    private $database;
     
     public function __construct() {
         $this->init_hooks();
-        $this->member_manager = new Member_Manager();
+        $this->database = new Database();
     }
     
     private function init_hooks() {
@@ -48,7 +48,7 @@ class CSV_Handler {
             'per_page' => -1
         ];
         
-        $members = $this->member_manager->get_members($args);
+        $members = $this->database->get_members($args);
         
         // Generate filename
         $filename = 'members-export';
@@ -212,7 +212,7 @@ class CSV_Handler {
             $args['member_type'] = $type;
         }
         
-        $members = $this->member_manager->get_members($args);
+        $members = $this->database->get_members($args);
         
         // Generate file name
         $filename = 'members-export';

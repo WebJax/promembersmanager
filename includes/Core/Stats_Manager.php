@@ -51,8 +51,8 @@ class Stats_Manager {
         
         $args = wp_parse_args($args, $default_args);
         
-        $member_manager = new Member_Manager();
-        $members = $member_manager->get_members($args);
+        $database = new Database();
+        $members = $database->get_members($args);
         
         // Initialize stats array
         $stats = [
@@ -79,47 +79,44 @@ class Stats_Manager {
         
         // Calculate statistics
         foreach ($members as $member) {
-            $type = $member['subscription_details']['type'];
-            $renewal_type = $member['subscription_details']['renewal_type'];
-            $product_id = $member['subscription_details']['product_id'];
-            $quantity = $member['subscription_details']['quantity'];
-            $postcode = $member['address']['postcode'] ?? '';
+            $product_id = $member['produkt-id'];
+            $postcode = $member['postnr'] ?? '';
             
             // Add to appropriate categories
             switch ($product_id) {
                 case '9503': // Auto private
-                    $stats['private']['total'] += $quantity;
-                    $stats['private']['auto']['total'] += $quantity;
-                    $stats['private']['auto']['regular'] += $quantity;
+                    $stats['private']['total']++;
+                    $stats['private']['auto']['total']++;
+                    $stats['private']['auto']['regular']++;
                     break;
                     
                 case '10968': // Manual private
-                    $stats['private']['total'] += $quantity;
-                    $stats['private']['manual']['total'] += $quantity;
-                    $stats['private']['manual']['regular'] += $quantity;
+                    $stats['private']['total']++;
+                    $stats['private']['manual']['total']++;
+                    $stats['private']['manual']['regular']++;
                     break;
                     
                 case '28736': // Auto pension
-                    $stats['private']['total'] += $quantity;
-                    $stats['private']['auto']['total'] += $quantity;
-                    $stats['private']['auto']['pension'] += $quantity;
+                    $stats['private']['total']++;
+                    $stats['private']['auto']['total']++;
+                    $stats['private']['auto']['pension']++;
                     break;
                     
                 case '28735': // Manual pension
-                    $stats['private']['total'] += $quantity;
-                    $stats['private']['manual']['total'] += $quantity;
-                    $stats['private']['manual']['pension'] += $quantity;
+                    $stats['private']['total']++;
+                    $stats['private']['manual']['total']++;
+                    $stats['private']['manual']['pension']++;
                     break;
                     
                 case '30734': // Auto union
                 case '19221': // Manual union
-                    $stats['union']['total'] += $quantity;
+                    $stats['union']['total']++;
                     
                     // Check location
                     if ($postcode === '4293') {
-                        $stats['union']['in_dianalund'] += $quantity;
+                        $stats['union']['in_dianalund']++;
                     } else {
-                        $stats['union']['outside_dianalund'] += $quantity;
+                        $stats['union']['outside_dianalund']++;
                     }
                     break;
             }

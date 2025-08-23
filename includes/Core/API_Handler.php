@@ -124,13 +124,13 @@ class API_Handler {
             'to_date' => date('Y-m-d')
         ];
         
-        $member_manager = new Member_Manager();
-        $members = $member_manager->get_members($args);
+        $database = new Database();
+        $members = $database->get_members($args);
         
         $failures = [];
         
         foreach ($members as $member) {
-            $transaction_id = $member['payment_id'];
+            $transaction_id = $member['betalingid'];
             
             if (empty($transaction_id)) {
                 continue;
@@ -141,8 +141,8 @@ class API_Handler {
             if ($payment_info && isset($payment_info['state']) && $payment_info['state'] !== 'active') {
                 $failures[] = [
                     'member_id' => $member['id'],
-                    'user_id' => $member['user_id'],
-                    'name' => $member['name'],
+                    'user_id' => $member['userid'],
+                    'name' => $member['firstname'] . ' ' . $member['lastname'],
                     'email' => $member['email'],
                     'payment_id' => $transaction_id,
                     'status' => $payment_info['state']
@@ -247,21 +247,21 @@ class API_Handler {
             $args['member_type'] = $type;
         }
         
-        $member_manager = new Member_Manager();
-        $members = $member_manager->get_members($args);
+        $database = new Database();
+        $members = $database->get_members($args);
         
         // Remove sensitive data for API response
         $sanitized_members = [];
         foreach ($members as $member) {
             $sanitized_members[] = [
                 'id' => $member['id'],
-                'name' => $member['name'],
+                'name' => $member['firstname'] . ' ' . $member['lastname'],
                 'company' => $member['company'],
-                'city' => $member['address']['city'],
-                'postcode' => $member['address']['postcode'],
-                'joined_date' => date('Y-m-d', strtotime($member['joined_date'])),
-                'membership_type' => $member['subscription_details']['type'],
-                'quantity' => $member['subscription_details']['quantity']
+                'city' => $member['by'],
+                'postcode' => $member['postnr'],
+                'joined_date' => $member['date'],
+                'membership_type' => $member['produkt-id'],
+                'quantity' => $member['antal']
             ];
         }
         
