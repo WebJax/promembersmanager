@@ -29,45 +29,51 @@ class Database {
         global $wpdb;
         
         $charset_collate = $wpdb->get_charset_collate();
-
-
-        // Define and create the members table name
-        $members_table = $wpdb->prefix . 'pmm_membership_metadata';
         
-        $sql = "CREATE TABLE $members_table (
+        // Create membership metadata table
+        $sql = "CREATE TABLE IF NOT EXISTS {$wpdb->prefix}pmm_membership_metadata (
             id mediumint(9) NOT NULL AUTO_INCREMENT,
-            user_id bigint(20) NOT NULL,
-            order_id bigint(20) NOT NULL,
+            user_id mediumint(9) NOT NULL,
+            order_id mediumint(9) NOT NULL,
             membership_type varchar(50) NOT NULL,
-            membership_number varchar(50) NOT NULL,
-            start_date datetime NOT NULL,
-            end_date datetime NOT NULL,
-            payment_method varchar(100) NOT NULL,
+            membership_status varchar(20) NOT NULL DEFAULT 'active',
+            payment_method varchar(50),
             payment_id varchar(100),
-            membership_status varchar(20) NOT NULL,
-            renewal_type varchar(20) NOT NULL,
-            additional_data text,
-            created_at datetime NOT NULL,
-            updated_at datetime NOT NULL,
-            PRIMARY KEY  (id),
+            renewal_type varchar(20),
+            start_date datetime DEFAULT CURRENT_TIMESTAMP,
+            end_date datetime,
+            created_at datetime DEFAULT CURRENT_TIMESTAMP,
+            updated_at datetime DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+            PRIMARY KEY (id),
             KEY user_id (user_id),
-            KEY order_id (order_id)
+            KEY order_id (order_id),
+            KEY membership_status (membership_status),
+            KEY membership_type (membership_type)
         ) $charset_collate;";
         
         require_once(ABSPATH . 'wp-admin/includes/upgrade.php');
         dbDelta($sql);
-
-        // Define and create dayly statistics table name
-        $dayly_stats_table = $wpdb->prefix . 'pmm_dayly_statistics';
-        $sql = "CREATE TABLE $dayly_stats_table (
+        
+        // Create daily stats table
+        $sql = "CREATE TABLE IF NOT EXISTS {$wpdb->prefix}pmm_daily_stats (
             id mediumint(9) NOT NULL AUTO_INCREMENT,
-            date datetime NOT NULL,
-            private_memberships int(11) NOT NULL,
-            union_memberships int(11) NOT NULL,
-            PRIMARY KEY  (id),
-            UNIQUE KEY date (date)
+            stat_date date NOT NULL,
+            total_members int(11) DEFAULT 0,
+            private_members int(11) DEFAULT 0,
+            pension_members int(11) DEFAULT 0,
+            union_members int(11) DEFAULT 0,
+            auto_renewals int(11) DEFAULT 0,
+            manual_renewals int(11) DEFAULT 0,
+            new_members int(11) DEFAULT 0,
+            created_at datetime DEFAULT CURRENT_TIMESTAMP,
+            PRIMARY KEY (id),
+            UNIQUE KEY stat_date (stat_date)
         ) $charset_collate;";
+        
         dbDelta($sql);
+        
+        // Update version option
+        update_option('pmm_db_version', PMM_DB_VERSION);
     }
 
     /**

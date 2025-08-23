@@ -9,6 +9,12 @@
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen-Sans, Ubuntu, Cantarell, "Helvetica Neue", sans-serif;
 }
 
+.pmm-frontend-container {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 20px;
+}
+
 /* Top grid section */
 .pmm-topgrid {
   display: flex;
@@ -96,61 +102,186 @@
 }
 
 /* Members table styling */
+.pmm-members-table-container {
+  overflow-x: auto;
+  background: #fff;
+  border: 1px solid #ddd;
+  border-radius: 6px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
 .pmm-members-table {
   width: 100%;
   border-collapse: collapse;
-  margin-bottom: 30px;
+  font-size: 14px;
 }
 
 .pmm-members-table th,
 .pmm-members-table td {
-  padding: 10px;
+  padding: 12px 15px;
   text-align: left;
-  vertical-align: top;
   border-bottom: 1px solid #eee;
 }
 
 .pmm-members-table th {
-  background-color: #f5f5f5;
-  font-weight: bold;
-  border-bottom: 2px solid #ddd;
+  background: #f8f9fa;
+  font-weight: 600;
+  color: #333;
+  border-bottom: 2px solid #dee2e6;
 }
 
-.pmm-table-row:hover {
-  background-color: #f9f9f9;
+.pmm-members-table tr:hover {
+  background: #f8f9fa;
 }
 
-.pmm-memberinfo {
-  line-height: 1.5;
+.pmm-members-table a {
+  color: #0073aa;
+  text-decoration: none;
 }
 
-/* Payment method styling */
-.pmm-payment-method {
+.pmm-members-table a:hover {
+  text-decoration: underline;
+}
+
+.member-type-badge {
   display: inline-block;
   padding: 3px 8px;
-  border-radius: 3px;
+  border-radius: 12px;
   font-size: 12px;
-  font-weight: bold;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
 }
 
-.pmm-payment-method.mobilepay {
-  background-color: #5A97F3;
-  color: white;
+.member-type-private {
+  background: #e3f2fd;
+  color: #1976d2;
 }
 
-.pmm-payment-method.kortbetaling,
-.pmm-payment-method.credit-card {
-  background-color: #28a745;
-  color: white;
+.member-type-pension {
+  background: #f3e5f5;
+  color: #7b1fa2;
 }
 
-.pmm-qp-id {
-  font-size: 12px;
+.member-type-union {
+  background: #e8f5e8;
+  color: #388e3c;
+}
+
+.member-type-unknown {
+  background: #fafafa;
+  color: #757575;
+}
+
+.pmm-edit-member {
+  color: #0073aa;
+  cursor: pointer;
+  border: none;
+  background: none;
+  text-decoration: underline;
+  font-size: 14px;
+}
+
+.pmm-edit-member:hover {
+  color: #005177;
+}
+
+.pmm-no-members {
+  padding: 40px 20px;
+  text-align: center;
   color: #666;
+  background: #f8f9fa;
+  border-radius: 6px;
 }
 
-.pmm-qp-id.number {
-  font-family: monospace;
+.pmm-pagination {
+  padding: 20px;
+  text-align: center;
+  border-top: 1px solid #eee;
+}
+
+.pmm-stats-overview {
+  display: flex;
+  gap: 20px;
+  margin-bottom: 30px;
+  flex-wrap: wrap;
+}
+
+.stat-item {
+  background: #f8f9fa;
+  padding: 15px 20px;
+  border-radius: 6px;
+  border-left: 4px solid #0073aa;
+  min-width: 150px;
+}
+
+.stat-label {
+  display: block;
+  font-size: 14px;
+  color: #666;
+  margin-bottom: 5px;
+}
+
+.stat-value {
+  display: block;
+  font-size: 24px;
+  font-weight: bold;
+  color: #333;
+}
+
+/* Filter styling */
+.pmm-filters-frontend {
+  background: #fff;
+  border: 1px solid #ddd;
+  border-radius: 6px;
+  padding: 20px;
+  margin-bottom: 30px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+.pmm-filter-form .filter-row {
+  display: flex;
+  gap: 15px;
+  align-items: end;
+  flex-wrap: wrap;
+}
+
+.filter-group {
+  display: flex;
+  flex-direction: column;
+  min-width: 120px;
+}
+
+.filter-group label {
+  font-weight: 600;
+  margin-bottom: 5px;
+  font-size: 14px;
+  color: #333;
+}
+
+.filter-group input[type="date"],
+.filter-group input[type="text"],
+.filter-group select {
+  padding: 8px 12px;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  font-size: 14px;
+  background: #fff;
+}
+
+.filter-group input[type="text"] {
+  min-width: 200px;
+}
+
+/* Action bar styling */
+.pmm-actions-bar {
+  margin-bottom: 20px;
+  padding: 15px 0;
+  border-bottom: 1px solid #eee;
+}
+
+.pmm-actions-bar .button {
+  margin-right: 10px;
 }
 
 /* Modal styling */
@@ -273,5 +404,58 @@
   
   .pmm-create-buttons-collection {
     grid-column: 1;
+  }
+  
+  .pmm-frontend-container {
+    padding: 10px;
+  }
+  
+  .pmm-stats-overview {
+    flex-direction: column;
+    gap: 10px;
+  }
+  
+  .stat-item {
+    text-align: center;
+  }
+  
+  .pmm-filter-form .filter-row {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  
+  .filter-group {
+    min-width: auto;
+  }
+  
+  .filter-group input[type="text"] {
+    min-width: auto;
+  }
+  
+  .pmm-members-table-container {
+    font-size: 12px;
+  }
+  
+  .pmm-members-table th,
+  .pmm-members-table td {
+    padding: 8px 10px;
+  }
+  
+  /* Hide less important columns on mobile */
+  .pmm-members-table th:nth-child(2),
+  .pmm-members-table td:nth-child(2), /* Company */
+  .pmm-members-table th:nth-child(4),
+  .pmm-members-table td:nth-child(4), /* Phone */
+  .pmm-members-table th:nth-child(7),
+  .pmm-members-table td:nth-child(7) { /* Joined date */
+    display: none;
+  }
+}
+
+@media (max-width: 480px) {
+  /* Hide even more columns on very small screens */
+  .pmm-members-table th:nth-child(5),
+  .pmm-members-table td:nth-child(5) { /* City */
+    display: none;
   }
 }

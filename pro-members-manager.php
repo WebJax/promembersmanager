@@ -32,6 +32,7 @@ define('PMM_PLUGIN_PATH', plugin_dir_path(__FILE__));
 define('PMM_PLUGIN_URL', plugin_dir_url(__FILE__));
 define('PMM_PLUGIN_VERSION', '1.0.0');
 define('PMM_PLUGIN_NAME', 'pro-members-manager');
+define('PMM_DB_VERSION', '1.0.0');
 
 // Include the autoloader
 require_once PMM_PLUGIN_PATH . 'includes/class-autoloader.php';
@@ -71,12 +72,13 @@ function promembersmanager_init() {
     add_action('wp_enqueue_scripts', 'promembersmanager_enqueue_frontend_assets');
     add_action('admin_enqueue_scripts', 'promembersmanager_enqueue_admin_assets');
     
-    // Register AJAX handlers
-    add_action('wp_ajax_pmm_export_csv', array(new ProMembersManager\Core\CSV_Handler(), 'export_csv'));
-    add_action('wp_ajax_pmm_create_member', array(new ProMembersManager\Core\Member_Manager(), 'create_member'));
-    add_action('wp_ajax_pmm_edit_member', array(new ProMembersManager\Core\Member_Manager(), 'edit_member'));
-    add_action('wp_ajax_pmm_update_member', array(new ProMembersManager\Core\Member_Manager(), 'update_member'));
-    add_action('wp_ajax_pmm_delete_member', array(new ProMembersManager\Core\Member_Manager(), 'delete_member'));
+    // Register AJAX handlers - Fix method names
+    add_action('wp_ajax_pmm_export_csv', array(new ProMembersManager\Core\CSV_Handler(), 'handle_export_csv'));
+    add_action('wp_ajax_pmm_save_member', array(new ProMembersManager\Core\Member_Manager(), 'handle_save_member'));
+    add_action('wp_ajax_pmm_edit_member', array(new ProMembersManager\Core\Member_Manager(), 'handle_edit_member'));
+    add_action('wp_ajax_pmm_create_member', array(new ProMembersManager\Core\Member_Manager(), 'handle_create_member'));
+    add_action('wp_ajax_pmm_load_dashboard_stats', 'promembersmanager_ajax_dashboard_stats');
+    add_action('wp_ajax_pmm_load_chart_data', 'promembersmanager_ajax_chart_data');
     
     // Add shortcodes
     add_shortcode('pro_members_list', array(new ProMembersManager\Frontend\Member_List(), 'render_shortcode'));
@@ -228,6 +230,71 @@ function promembersmanager_enqueue_admin_assets() {
             )
         );
     }
+}
+
+/**
+ * AJAX handler for dashboard stats
+ */
+function promembersmanager_ajax_dashboard_stats() {
+    check_ajax_referer('pmm_admin_nonce', 'nonce');
+    
+    if (!current_user_can('edit_users')) {
+        wp_send_json_error(['message' => 'Insufficient permissions']);
+    }
+    
+    $member_manager = new ProMembersManager\Core\Member_Manager();
+    $stats = $member_manager->get_members_count(['group_by' => 'both']);
+    
+    $dashboard_stats = [
+        'total_members' => array_sum(array_map('array_sum', $stats)),
+        'private_members' => array_sum($stats['private'] ?? []),
+        'union_members' => array_sum($stats['union'] ?? []),
+        'auto_renewals' => ($stats['private']['auto'] ?? 0) + ($stats['union']['auto'] ?? 0) + ($stats['pension']['auto'] ?? 0)
+    ];
+    
+    wp_send_json_success($dashboard_stats);
+}
+
+/**
+ * AJAX handler for chart data
+ */
+function promembersmanager_ajax_chart_data() {
+    check_ajax_referer('pmm_admin_nonce', 'nonce');
+    
+    if (!current_user_can('edit_users')) {
+        wp_send_json_error(['message' => 'Insufficient permissions']);
+    }
+    
+    $database = new ProMembersManager\Core\Database();
+    $from_date = date('Y-m-d', strtotime('-30 days'));
+    $to_date = date('Y-m-d');
+    
+    // Get member manager to access daily stats functionality
+    $member_manager = new ProMembersManager\Core\Member_Manager();
+    $daily_stats = $member_manager->get_daily_stats($from_date, $to_date);
+    
+    $labels = [];
+    $data = [];
+    
+    foreach ($daily_stats as $stat) {
+        $labels[] = date('M j', strtotime($stat['stat_date']));
+        $data[] = $stat['total_members'];
+    }
+    
+    $chart_data = [
+        'labels' => $labels,
+        'datasets' => [
+            [
+                'label' => 'Total Members',
+                'data' => $data,
+                'borderColor' => '#0073aa',
+                'backgroundColor' => 'rgba(0,115,170,0.1)',
+                'fill' => true
+            ]
+        ]
+    ];
+    
+    wp_send_json_success($chart_data);
 }
 
 // Initialize the plugin
