@@ -464,14 +464,15 @@ class Database {
      * @return bool True on success, false on failure
      */
     static function record_daily_stats() {
-        $stats = Database::get_member_statistics();
+        $database = new self();
+        $stats = $database->get_member_statistics();
 
         global $wpdb;
         
         $dayly_stats_table = $wpdb->prefix . 'pmm_dayly_statistics';
         
-        $data['date'] = current_time('Y-m-d');
         $data = array(
+            'date' => current_time('Y-m-d'),
             'private_memberships' => $stats['count_privatememberships'],
             'union_memberships' => $stats['count_unionmemberships'],
         );

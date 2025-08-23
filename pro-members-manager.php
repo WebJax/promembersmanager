@@ -32,6 +32,7 @@ define('PMM_PLUGIN_PATH', plugin_dir_path(__FILE__));
 define('PMM_PLUGIN_URL', plugin_dir_url(__FILE__));
 define('PMM_PLUGIN_VERSION', '1.0.0');
 define('PMM_PLUGIN_NAME', 'pro-members-manager');
+define('PMM_DB_VERSION', '1.0.0');
 
 // Include the autoloader
 require_once PMM_PLUGIN_PATH . 'includes/class-autoloader.php';
@@ -42,44 +43,75 @@ require_once PMM_PLUGIN_PATH . 'includes/class-autoloader.php';
  * @since 1.0.0
  */
 function promembersmanager_init() {
-    // Register activation and deactivation hooks
-    register_activation_hook(PMM_PLUGIN_FILE, 'promembersmanager_activate');
-    register_deactivation_hook(PMM_PLUGIN_FILE, 'promembersmanager_deactivate');
-    
-    // Initialize autoloader
-    $autoloader = new ProMembersManager\Autoloader();
-    $autoloader->register();
-    
-    // Initialize core components
-    $database = new ProMembersManager\Core\Database();
-    $database->init();
-    
-    // Initialize admin
-    if (is_admin()) {
-        $admin_menu = new ProMembersManager\Admin\Admin_Menu();
+    try {
+        // Register activation and deactivation hooks
+        register_activation_hook(PMM_PLUGIN_FILE, 'promembersmanager_activate');
+        register_deactivation_hook(PMM_PLUGIN_FILE, 'promembersmanager_deactivate');
+        
+        // Initialize autoloader
+        $autoloader = new ProMembersManager\Autoloader();
+        $autoloader->register();
+        
+        // Initialize core components with error checking
+        if (class_exists('ProMembersManager\Core\Database')) {
+            $database = new ProMembersManager\Core\Database();
+            $database->init();
+        }
+        
+        // Initialize admin
+        if (is_admin() && class_exists('ProMembersManager\Admin\Admin_Menu')) {
+            new ProMembersManager\Admin\Admin_Menu();
+        }
+        
+        // Initialize frontend
+        if (!is_admin() && class_exists('ProMembersManager\Frontend\Member_List')) {
+            new ProMembersManager\Frontend\Member_List();
+        }
+        
+        // Initialize API Handler (only if it exists)
+        if (class_exists('ProMembersManager\Core\API_Handler')) {
+            new ProMembersManager\Core\API_Handler();
+        }
+        
+        // Register assets
+        add_action('wp_enqueue_scripts', 'promembersmanager_enqueue_frontend_assets');
+        add_action('admin_enqueue_scripts', 'promembersmanager_enqueue_admin_assets');
+        
+        // Register AJAX handlers only if classes exist
+        if (class_exists('ProMembersManager\Core\Member_Manager') && class_exists('ProMembersManager\Core\CSV_Handler')) {
+            $member_manager = new ProMembersManager\Core\Member_Manager();
+            $csv_handler = new ProMembersManager\Core\CSV_Handler();
+            
+            add_action('wp_ajax_pmm_export_csv', array($csv_handler, 'handle_export_csv'));
+            add_action('wp_ajax_pmm_save_member', array($member_manager, 'handle_save_member'));
+            add_action('wp_ajax_pmm_edit_member', array($member_manager, 'handle_edit_member'));
+            add_action('wp_ajax_pmm_create_member', array($member_manager, 'handle_create_member'));
+        }
+        
+        // Add shortcodes
+        if (class_exists('ProMembersManager\Frontend\Member_List')) {
+            add_shortcode('pro_members_list', array(new ProMembersManager\Frontend\Member_List(), 'render_shortcode'));
+        }
+        
+    } catch (Error $e) {
+        // Handle fatal errors
+        error_log('Pro Members Manager fatal error: ' . $e->getMessage());
+        
+        add_action('admin_notices', function() use ($e) {
+            echo '<div class="notice notice-error"><p>';
+            echo sprintf(__('Pro Members Manager failed to initialize (Fatal Error): %s', 'pro-members-manager'), esc_html($e->getMessage()));
+            echo '</p></div>';
+        });
+    } catch (Exception $e) {
+        // Handle general exceptions
+        error_log('Pro Members Manager initialization error: ' . $e->getMessage());
+        
+        add_action('admin_notices', function() use ($e) {
+            echo '<div class="notice notice-error"><p>';
+            echo sprintf(__('Pro Members Manager failed to initialize: %s', 'pro-members-manager'), esc_html($e->getMessage()));
+            echo '</p></div>';
+        });
     }
-    
-    // Initialize frontend
-    if (!is_admin()) {
-        $member_list = new ProMembersManager\Frontend\Member_List();
-    }
-    
-    // Initialize API Handler
-    $api_handler = new ProMembersManager\Core\API_Handler();
-    
-    // Register assets
-    add_action('wp_enqueue_scripts', 'promembersmanager_enqueue_frontend_assets');
-    add_action('admin_enqueue_scripts', 'promembersmanager_enqueue_admin_assets');
-    
-    // Register AJAX handlers
-    add_action('wp_ajax_pmm_export_csv', array(new ProMembersManager\Core\CSV_Handler(), 'export_csv'));
-    add_action('wp_ajax_pmm_create_member', array(new ProMembersManager\Core\Member_Manager(), 'create_member'));
-    add_action('wp_ajax_pmm_edit_member', array(new ProMembersManager\Core\Member_Manager(), 'edit_member'));
-    add_action('wp_ajax_pmm_update_member', array(new ProMembersManager\Core\Member_Manager(), 'update_member'));
-    add_action('wp_ajax_pmm_delete_member', array(new ProMembersManager\Core\Member_Manager(), 'delete_member'));
-    
-    // Add shortcodes
-    add_shortcode('pro_members_list', array(new ProMembersManager\Frontend\Member_List(), 'render_shortcode'));
 }
 
 /**
@@ -88,15 +120,37 @@ function promembersmanager_init() {
  * @since 1.0.0
  */
 function promembersmanager_activate() {
-    // Create database tables
-    $database = new ProMembersManager\Core\Database();
-    $database->create_tables();
-    
-    // Add capabilities
-    promembersmanager_add_capabilities();
-    
-    // Flush rewrite rules
-    flush_rewrite_rules();
+    try {
+        // Initialize autoloader first
+        if (!class_exists('ProMembersManager\Autoloader')) {
+            require_once PMM_PLUGIN_PATH . 'includes/class-autoloader.php';
+        }
+        $autoloader = new ProMembersManager\Autoloader();
+        $autoloader->register();
+        
+        // Create database tables if Database class exists
+        if (class_exists('ProMembersManager\Core\Database')) {
+            $database = new ProMembersManager\Core\Database();
+            $database->create_tables();
+        }
+        
+        // Add capabilities
+        promembersmanager_add_capabilities();
+        
+        // Flush rewrite rules
+        flush_rewrite_rules();
+        
+    } catch (Exception $e) {
+        error_log('Pro Members Manager activation error: ' . $e->getMessage());
+        
+        // Deactivate plugin if activation fails
+        deactivate_plugins(plugin_basename(PMM_PLUGIN_FILE));
+        
+        wp_die(sprintf(
+            __('Plugin activation failed: %s', 'pro-members-manager'),
+            esc_html($e->getMessage())
+        ));
+    }
 }
 
 /**

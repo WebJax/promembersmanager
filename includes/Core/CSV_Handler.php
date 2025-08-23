@@ -23,6 +23,91 @@ class CSV_Handler {
     }
     
     /**
+     * Handle AJAX export request
+     */
+    public function handle_export_csv() {
+        check_ajax_referer('pmm_admin_nonce', 'nonce');
+        
+        if (!current_user_can('edit_users')) {
+            wp_send_json_error(['message' => __('Permission denied.', 'pro-members-manager')]);
+        }
+        
+        // Get filters from request
+        $from_date = isset($_POST['from_date']) ? sanitize_text_field($_POST['from_date']) : date('Y-m-d', strtotime('-1 year'));
+        $to_date = isset($_POST['to_date']) ? sanitize_text_field($_POST['to_date']) : date('Y-m-d');
+        $member_type = isset($_POST['member_type']) ? sanitize_text_field($_POST['member_type']) : '';
+        
+        // Get members
+        $args = [
+            'from_date' => $from_date,
+            'to_date' => $to_date,
+            'member_type' => $member_type,
+            'per_page' => -1
+        ];
+        
+        $members = $this->member_manager->get_members($args);
+        
+        // Generate filename
+        $filename = 'members-export';
+        if (!empty($member_type)) {
+            $filename .= '-' . $member_type;
+        }
+        $filename .= '-' . date('Y-m-d') . '.csv';
+        
+        // Set headers
+        header('Content-Type: text/csv; charset=utf-8');
+        header('Content-Disposition: attachment; filename=' . $filename);
+        
+        $output = fopen('php://output', 'w');
+        
+        // Add BOM for Excel UTF-8 compatibility
+        fputs($output, "\xEF\xBB\xBF");
+        
+        // Headers
+        fputcsv($output, [
+            __('First Name', 'pro-members-manager'),
+            __('Last Name', 'pro-members-manager'),
+            __('Company/Organization', 'pro-members-manager'),
+            __('Email', 'pro-members-manager'),
+            __('Address', 'pro-members-manager'),
+            __('Postal Code', 'pro-members-manager'),
+            __('City', 'pro-members-manager'),
+            __('Phone', 'pro-members-manager'),
+            __('Joined Date', 'pro-members-manager'),
+            __('Membership Type', 'pro-members-manager'),
+            __('Quantity', 'pro-members-manager'),
+            __('Payment Method', 'pro-members-manager')
+        ], ';');
+        
+        foreach ($members as $member) {
+            // Parse name
+            $name_parts = explode(' ', $member['name'], 2);
+            $first_name = $name_parts[0] ?? '';
+            $last_name = $name_parts[1] ?? '';
+            
+            $row = [
+                $first_name,
+                $last_name,
+                $member['company'],
+                $member['email'],
+                $member['address']['line1'],
+                $member['address']['postcode'],
+                $member['address']['city'],
+                $member['phone'],
+                date('d-m-Y', strtotime($member['joined_date'])),
+                $this->get_membership_type_label($member['subscription_details']['product_id']),
+                $member['subscription_details']['quantity'],
+                $member['payment_method']
+            ];
+            
+            fputcsv($output, $row, ';');
+        }
+        
+        fclose($output);
+        exit;
+    }
+
+    /**
      * Process the export request
      */
     public function process_export() {

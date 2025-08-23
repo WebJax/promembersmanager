@@ -42,12 +42,20 @@ class Autoloader {
         // Convert namespace separators to directory separators
         $file = str_replace('\\', DIRECTORY_SEPARATOR, $relative_class);
         
-        // Build the full path
-        $file = PMM_PLUGIN_PATH . 'includes' . DIRECTORY_SEPARATOR . $file . '.php';
+        // Build possible file paths
+        $possible_files = [
+            // First try includes directory with namespace structure
+            PMM_PLUGIN_PATH . 'includes' . DIRECTORY_SEPARATOR . $file . '.php',
+            // Then try core directory for Member_Manager
+            PMM_PLUGIN_PATH . 'core' . DIRECTORY_SEPARATOR . strtolower(str_replace('Core\\', '', $file)) . '.php'
+        ];
         
-        // If the file exists, require it
-        if (file_exists($file)) {
-            require_once $file;
+        // Try each possible file location
+        foreach ($possible_files as $file_path) {
+            if (file_exists($file_path)) {
+                require_once $file_path;
+                return;
+            }
         }
     }
 }
