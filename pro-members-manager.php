@@ -88,6 +88,9 @@ function promembersmanager_init() {
             add_action('wp_ajax_pmm_create_member', array($member_manager, 'handle_create_member'));
         }
         
+        // Add settings AJAX handler
+        add_action('wp_ajax_pmm_recreate_tables', 'promembersmanager_recreate_tables_ajax');
+        
         // Add shortcodes
         if (class_exists('ProMembersManager\Frontend\Member_List')) {
             add_shortcode('pro_members_list', array(new ProMembersManager\Frontend\Member_List(), 'render_shortcode'));
@@ -281,6 +284,29 @@ function promembersmanager_enqueue_admin_assets() {
                 )
             )
         );
+    }
+}
+
+/**
+ * AJAX handler to recreate database tables
+ */
+function promembersmanager_recreate_tables_ajax() {
+    check_ajax_referer('pmm_recreate_tables', 'nonce');
+    
+    if (!current_user_can('manage_options')) {
+        wp_send_json_error(['message' => __('Permission denied.', 'pro-members-manager')]);
+    }
+    
+    try {
+        if (class_exists('ProMembersManager\Core\Database')) {
+            $database = new ProMembersManager\Core\Database();
+            $database->create_tables();
+            wp_send_json_success(['message' => __('Database tables recreated successfully.', 'pro-members-manager')]);
+        } else {
+            wp_send_json_error(['message' => __('Database class not found.', 'pro-members-manager')]);
+        }
+    } catch (Exception $e) {
+        wp_send_json_error(['message' => $e->getMessage()]);
     }
 }
 

@@ -33,3 +33,130 @@
     color: #0073aa;
     line-height: 1;
 }
+
+.pmm-filters {
+    background: #fff;
+    border: 1px solid #ccd0d4;
+    border-radius: 4px;
+    padding: 20px;
+    margin: 20px 0;
+}
+
+.pmm-filters form {
+    display: flex;
+    align-items: center;
+    gap: 15px;
+    flex-wrap: wrap;
+}
+
+.pmm-filters label {
+    font-weight: 600;
+    margin-right: 5px;
+}
+
+.pmm-filters input[type="date"],
+.pmm-filters select {
+    border: 1px solid #ddd;
+    border-radius: 3px;
+    padding: 6px 8px;
+    font-size: 14px;
+}
+
+.pmm-stats-overview {
+    margin-top: 30px;
+}
+
+.pmm-charts-section {
+    background: #fff;
+    border: 1px solid #ccd0d4;
+    border-radius: 4px;
+    padding: 20px;
+    margin: 20px 0;
+}
+
+.pmm-charts-section h2 {
+    margin-top: 0;
+    margin-bottom: 20px;
+    color: #333;
+}
+
+.chart-container {
+    position: relative;
+    height: 300px;
+    width: 100%;
+    max-width: 500px;
+    margin: 0 auto;
+}
+
+.pmm-detailed-stats {
+    background: #fff;
+    border: 1px solid #ccd0d4;
+    border-radius: 4px;
+    padding: 20px;
+    margin: 20px 0;
+}
+
+/* Export and Settings page specific styles */
+.pmm-export-form,
+.pmm-export-preview {
+    background: #fff;
+    border: 1px solid #ccd0d4;
+    border-radius: 4px;
+    padding: 20px;
+    margin-bottom: 20px;
+}
+
+.pmm-export-actions {
+    margin-top: 20px;
+    padding-top: 20px;
+    border-top: 1px solid #ddd;
+}
+
+.pmm-export-actions .button {
+    margin-right: 10px;
+}
+
+.pmm-export-info {
+    background: #f0f6fc;
+    border: 1px solid #c3e4f7;
+    border-radius: 4px;
+    padding: 20px;
+}
+
+.pmm-export-info ul {
+    margin-left: 20px;
+}
+
+/* Settings page tabs */
+.nav-tab-wrapper {
+    margin-bottom: 20px;
+}
+
+.tab-content {
+    background: #fff;
+    border: 1px solid #ccd0d4;
+    border-radius: 4px;
+    padding: 20px;
+}
+
+.form-table h3 {
+    margin-top: 0;
+    margin-bottom: 10px;
+    color: #0073aa;
+}
+
+/* Responsive design */
+@media (max-width: 768px) {
+    .pmm-stats-grid {
+        grid-template-columns: 1fr;
+    }
+    
+    .pmm-filters form {
+        flex-direction: column;
+        align-items: flex-start;
+    }
+    
+    .chart-container {
+        height: 250px;
+    }
+}
