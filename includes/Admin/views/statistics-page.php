@@ -1,23 +1,47 @@
 <?php
 defined('ABSPATH') || exit;
 
-// Get statistics data
-$member_manager = new ProMembersManager\Core\Member_Manager();
-$database = new ProMembersManager\Core\Database();
-
-// Get date range from URL or set defaults
-$from_date = isset($_GET['from_date']) ? sanitize_text_field($_GET['from_date']) : date('Y-m-d', strtotime('-1 month'));
-$to_date = isset($_GET['to_date']) ? sanitize_text_field($_GET['to_date']) : date('Y-m-d');
-$member_type = isset($_GET['member_type']) ? sanitize_text_field($_GET['member_type']) : '';
-
-// Get member statistics
-$stats_args = [
-    'from_date' => $from_date,
-    'to_date' => $to_date
+// Initialize variables with defaults
+$daily_stats = [];
+$member_counts = [
+    'private' => ['auto' => 0, 'manual' => 0],
+    'pension' => ['auto' => 0, 'manual' => 0],
+    'union' => ['auto' => 0, 'manual' => 0],
+    'unknown' => ['auto' => 0, 'manual' => 0]
 ];
 
-$daily_stats = $database->get_member_statistics($stats_args);
-$member_counts = $member_manager->get_members_count(['group_by' => 'both']);
+try {
+    // Check if classes exist before using them
+    if (!class_exists('ProMembersManager\Core\Member_Manager') || !class_exists('ProMembersManager\Core\Database')) {
+        throw new Exception(__('Required classes not found. Please check plugin installation.', 'pro-members-manager'));
+    }
+
+    // Get statistics data
+    $member_manager = new ProMembersManager\Core\Member_Manager();
+    $database = new ProMembersManager\Core\Database();
+
+    // Get date range from URL or set defaults
+    $from_date = isset($_GET['from_date']) ? sanitize_text_field($_GET['from_date']) : date('Y-m-d', strtotime('-1 month'));
+    $to_date = isset($_GET['to_date']) ? sanitize_text_field($_GET['to_date']) : date('Y-m-d');
+    $member_type = isset($_GET['member_type']) ? sanitize_text_field($_GET['member_type']) : '';
+
+    // Get member statistics
+    $stats_args = [
+        'from_date' => $from_date,
+        'to_date' => $to_date
+    ];
+
+    $daily_stats = $database->get_member_statistics($stats_args);
+    $member_counts = $member_manager->get_members_count(['group_by' => 'both']);
+
+} catch (Exception $e) {
+    echo '<div class="notice notice-error"><p>' . esc_html($e->getMessage()) . '</p></div>';
+    
+    // Set safe defaults if there's an error
+    $from_date = date('Y-m-d', strtotime('-1 month'));
+    $to_date = date('Y-m-d');
+    $member_type = '';
+}
 ?>
 
 <div class="wrap">
@@ -50,28 +74,56 @@ $member_counts = $member_manager->get_members_count(['group_by' => 'both']);
             <div class="pmm-stat-card">
                 <h3><?php _e('Total Members', 'pro-members-manager'); ?></h3>
                 <div class="stat-number">
-                    <?php echo esc_html(array_sum(array_map('array_sum', $member_counts))); ?>
+                    <?php 
+                    $total = 0;
+                    if (is_array($member_counts)) {
+                        foreach ($member_counts as $type_data) {
+                            if (is_array($type_data)) {
+                                $total += array_sum($type_data);
+                            }
+                        }
+                    }
+                    echo esc_html($total);
+                    ?>
                 </div>
             </div>
             
             <div class="pmm-stat-card">
                 <h3><?php _e('Private Members', 'pro-members-manager'); ?></h3>
                 <div class="stat-number">
-                    <?php echo esc_html(array_sum($member_counts['private'] ?? [0])); ?>
+                    <?php 
+                    $private_total = 0;
+                    if (isset($member_counts['private']) && is_array($member_counts['private'])) {
+                        $private_total = array_sum($member_counts['private']);
+                    }
+                    echo esc_html($private_total);
+                    ?>
                 </div>
             </div>
             
             <div class="pmm-stat-card">
                 <h3><?php _e('Pension Members', 'pro-members-manager'); ?></h3>
                 <div class="stat-number">
-                    <?php echo esc_html(array_sum($member_counts['pension'] ?? [0])); ?>
+                    <?php 
+                    $pension_total = 0;
+                    if (isset($member_counts['pension']) && is_array($member_counts['pension'])) {
+                        $pension_total = array_sum($member_counts['pension']);
+                    }
+                    echo esc_html($pension_total);
+                    ?>
                 </div>
             </div>
             
             <div class="pmm-stat-card">
                 <h3><?php _e('Union Members', 'pro-members-manager'); ?></h3>
                 <div class="stat-number">
-                    <?php echo esc_html(array_sum($member_counts['union'] ?? [0])); ?>
+                    <?php 
+                    $union_total = 0;
+                    if (isset($member_counts['union']) && is_array($member_counts['union'])) {
+                        $union_total = array_sum($member_counts['union']);
+                    }
+                    echo esc_html($union_total);
+                    ?>
                 </div>
             </div>
         </div>
@@ -82,8 +134,12 @@ $member_counts = $member_manager->get_members_count(['group_by' => 'both']);
                 <div class="stat-number">
                     <?php 
                     $auto_total = 0;
-                    foreach ($member_counts as $type => $renewals) {
-                        $auto_total += $renewals['auto'] ?? 0;
+                    if (is_array($member_counts)) {
+                        foreach ($member_counts as $type => $renewals) {
+                            if (is_array($renewals) && isset($renewals['auto'])) {
+                                $auto_total += intval($renewals['auto']);
+                            }
+                        }
                     }
                     echo esc_html($auto_total);
                     ?>
@@ -95,8 +151,12 @@ $member_counts = $member_manager->get_members_count(['group_by' => 'both']);
                 <div class="stat-number">
                     <?php 
                     $manual_total = 0;
-                    foreach ($member_counts as $type => $renewals) {
-                        $manual_total += $renewals['manual'] ?? 0;
+                    if (is_array($member_counts)) {
+                        foreach ($member_counts as $type => $renewals) {
+                            if (is_array($renewals) && isset($renewals['manual'])) {
+                                $manual_total += intval($renewals['manual']);
+                            }
+                        }
                     }
                     echo esc_html($manual_total);
                     ?>
@@ -125,16 +185,26 @@ $member_counts = $member_manager->get_members_count(['group_by' => 'both']);
                 </tr>
             </thead>
             <tbody>
-                <?php foreach ($member_counts as $type => $renewals): ?>
-                    <?php if ($type !== 'unknown' || array_sum($renewals) > 0): ?>
+                <?php 
+                if (is_array($member_counts)) {
+                    foreach ($member_counts as $type => $renewals):
+                        if (!is_array($renewals)) continue;
+                        $type_total = array_sum($renewals);
+                        if ($type !== 'unknown' || $type_total > 0): 
+                ?>
                         <tr>
                             <td><strong><?php echo esc_html(ucfirst($type)); ?></strong></td>
-                            <td><?php echo esc_html($renewals['auto'] ?? 0); ?></td>
-                            <td><?php echo esc_html($renewals['manual'] ?? 0); ?></td>
-                            <td><strong><?php echo esc_html(array_sum($renewals)); ?></strong></td>
+                            <td><?php echo esc_html(intval($renewals['auto'] ?? 0)); ?></td>
+                            <td><?php echo esc_html(intval($renewals['manual'] ?? 0)); ?></td>
+                            <td><strong><?php echo esc_html($type_total); ?></strong></td>
                         </tr>
-                    <?php endif; ?>
-                <?php endforeach; ?>
+                <?php 
+                        endif;
+                    endforeach;
+                } else {
+                    echo '<tr><td colspan="4">' . __('No data available', 'pro-members-manager') . '</td></tr>';
+                }
+                ?>
             </tbody>
         </table>
     </div>
@@ -155,9 +225,15 @@ jQuery(document).ready(function($) {
                 ],
                 datasets: [{
                     data: [
-                        <?php echo array_sum($member_counts['private'] ?? [0]); ?>,
-                        <?php echo array_sum($member_counts['pension'] ?? [0]); ?>,
-                        <?php echo array_sum($member_counts['union'] ?? [0]); ?>
+                        <?php 
+                        $private_total = isset($member_counts['private']) && is_array($member_counts['private']) ? array_sum($member_counts['private']) : 0;
+                        $pension_total = isset($member_counts['pension']) && is_array($member_counts['pension']) ? array_sum($member_counts['pension']) : 0;
+                        $union_total = isset($member_counts['union']) && is_array($member_counts['union']) ? array_sum($member_counts['union']) : 0;
+                        
+                        echo intval($private_total) . ',';
+                        echo intval($pension_total) . ',';
+                        echo intval($union_total);
+                        ?>
                     ],
                     backgroundColor: [
                         '#0073aa',

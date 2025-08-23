@@ -84,43 +84,73 @@ class Member_Manager {
     }
 
     private function prepare_member_data($order) {
+        if (!$order || !is_object($order)) {
+            throw new \Exception('Invalid order object');
+        }
+        
         $user_id = $order->get_user_id();
         $user = get_userdata($user_id);
+        
+        if (!$user) {
+            // If no user found, create default data
+            $user_registered = $order->get_date_created() ? $order->get_date_created()->date('Y-m-d H:i:s') : current_time('mysql');
+        } else {
+            $user_registered = $user->user_registered;
+        }
 
         $member = [
             'id' => $order->get_id(),
             'user_id' => $user_id,
-            'name' => $order->get_formatted_billing_full_name(),
-            'email' => $order->get_billing_email(),
-            'company' => $order->get_billing_company(),
+            'name' => $order->get_formatted_billing_full_name() ?: 'Unknown',
+            'email' => $order->get_billing_email() ?: '',
+            'company' => $order->get_billing_company() ?: '',
             'address' => [
-                'line1' => $order->get_billing_address_1(),
-                'line2' => $order->get_billing_address_2(),
-                'city' => $order->get_billing_city(),
-                'postcode' => $order->get_billing_postcode(),
-                'country' => $order->get_billing_country()
+                'line1' => $order->get_billing_address_1() ?: '',
+                'line2' => $order->get_billing_address_2() ?: '',
+                'city' => $order->get_billing_city() ?: '',
+                'postcode' => $order->get_billing_postcode() ?: '',
+                'country' => $order->get_billing_country() ?: 'DK'
             ],
-            'phone' => $order->get_billing_phone(),
-            'joined_date' => $user->user_registered,
+            'phone' => $order->get_billing_phone() ?: '',
+            'joined_date' => $user_registered,
             'subscription_details' => $this->get_subscription_details($order),
-            'payment_method' => $order->get_payment_method_title(),
-            'payment_id' => $order->get_transaction_id()
+            'payment_method' => $order->get_payment_method_title() ?: '',
+            'payment_id' => $order->get_transaction_id() ?: ''
         ];
 
         return $member;
     }
 
     private function get_subscription_details($order) {
-        $details = [];
-        foreach ($order->get_items() as $item) {
-            $product_id = $item->get_product_id();
-            $details = [
-                'product_id' => $product_id,
-                'quantity' => $item->get_quantity(),
-                'type' => $this->get_member_type($product_id),
-                'renewal_type' => $this->get_renewal_type($product_id)
-            ];
+        $details = [
+            'product_id' => 0,
+            'quantity' => 1,
+            'type' => 'unknown',
+            'renewal_type' => 'unknown'
+        ];
+        
+        try {
+            $items = $order->get_items();
+            if (empty($items)) {
+                return $details;
+            }
+            
+            foreach ($items as $item) {
+                $product_id = intval($item->get_product_id());
+                if ($product_id > 0) {
+                    $details = [
+                        'product_id' => $product_id,
+                        'quantity' => intval($item->get_quantity()) ?: 1,
+                        'type' => $this->get_member_type($product_id),
+                        'renewal_type' => $this->get_renewal_type($product_id)
+                    ];
+                    break; // Use first valid item
+                }
+            }
+        } catch (\Exception $e) {
+            error_log('Pro Members Manager - Error getting subscription details: ' . $e->getMessage());
         }
+        
         return $details;
     }
 
@@ -506,6 +536,15 @@ class Member_Manager {
 
         $args = wp_parse_args($args, $defaults);
         
+        // Check if WooCommerce is active
+        if (!function_exists('wc_get_orders')) {
+            return ($args['group_by'] === 'both') ? [
+                'private' => ['auto' => 0, 'manual' => 0],
+                'pension' => ['auto' => 0, 'manual' => 0], 
+                'union' => ['auto' => 0, 'manual' => 0]
+            ] : 0;
+        }
+        
         // Prepare query params for WC orders
         $query_args = [
             'status' => 'completed',
@@ -517,8 +556,18 @@ class Member_Manager {
             $query_args['date_paid'] = $args['from_date'] . '...' . $args['to_date'];
         }
         
-        // Get all completed orders
-        $orders = wc_get_orders($query_args);
+        try {
+            // Get all completed orders
+            $orders = wc_get_orders($query_args);
+            
+            if (!is_array($orders)) {
+                $orders = [];
+            }
+            
+        } catch (\Exception $e) {
+            error_log('Pro Members Manager - Error getting orders: ' . $e->getMessage());
+            $orders = [];
+        }
         
         // If no grouping requested, return simple count
         if (empty($args['group_by'])) {
@@ -614,21 +663,27 @@ class Member_Manager {
             ];
             
             foreach ($orders as $order) {
-                $member_data = $this->prepare_member_data($order);
-                $subscription = $member_data['subscription_details'];
-                $type = $subscription['type'];
-                $renewal = $subscription['renewal_type'];
-                
-                // Initialize if not set
-                if (!isset($counts[$type])) {
-                    $type = 'unknown';
+                try {
+                    $member_data = $this->prepare_member_data($order);
+                    $subscription = $member_data['subscription_details'];
+                    $type = $subscription['type'];
+                    $renewal = $subscription['renewal_type'];
+                    
+                    // Initialize if not set
+                    if (!isset($counts[$type])) {
+                        $type = 'unknown';
+                    }
+                    if (!isset($counts[$type][$renewal])) {
+                        $renewal = 'unknown';
+                    }
+                    
+                    // Increment the appropriate counter
+                    $counts[$type][$renewal] += intval($subscription['quantity'] ?? 1);
+                } catch (\Exception $e) {
+                    // Skip this order if there's an error
+                    error_log('Pro Members Manager - Error processing order ' . $order->get_id() . ': ' . $e->getMessage());
+                    continue;
                 }
-                if (!isset($counts[$type][$renewal])) {
-                    $renewal = 'unknown';
-                }
-                
-                // Increment the appropriate counter
-                $counts[$type][$renewal] += $subscription['quantity'];
             }
         }
         
