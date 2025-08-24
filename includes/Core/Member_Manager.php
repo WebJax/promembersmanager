@@ -753,4 +753,177 @@ class Member_Manager {
         
         return $counts;
     }
+
+    /**
+     * Get precise count of active members on a specific date
+     * Counts both active subscriptions and manual memberships bought within the last year
+     * 
+     * @param string $date Target date in Y-m-d format
+     * @param string $member_type Optional. Filter by member type: 'private', 'pension', 'union', or '' for all
+     * @return int|array If member_type specified, returns count. Otherwise returns array with counts by type.
+     */
+    public function get_active_members_on_date($date, $member_type = '') {
+        $target_date = new \DateTime($date);
+        $one_year_ago = clone $target_date;
+        $one_year_ago->modify('-1 year');
+        
+        $active_members = [];
+        
+        // Check if WooCommerce is active
+        if (!function_exists('wc_get_orders') || !function_exists('wcs_get_subscriptions_for_order')) {
+            return $member_type !== '' ? 0 : ['total' => 0, 'private' => 0, 'pension' => 0, 'union' => 0];
+        }
+        
+        // Get all completed WooCommerce orders up to target date
+        $args = [
+            'limit' => -1,
+            'type' => 'shop_order',
+            'status' => ['completed', 'processing'],
+            'date_created' => '<=' . $target_date->format('Y-m-d 23:59:59'),
+        ];
+        
+        $orders = wc_get_orders($args);
+        
+        foreach ($orders as $order) {
+            if (!$order || !method_exists($order, 'get_id')) continue;
+            
+            $customer_id = $order->get_customer_id();
+            if (!$customer_id) continue;
+            
+            // Skip if we already counted this customer (use latest order)
+            if (isset($active_members[$customer_id])) continue;
+            
+            $order_date = $order->get_date_created();
+            if (!$order_date) continue;
+            
+            $is_active = false;
+            $customer_member_type = '';
+            
+            // Check order items for membership products
+            $items = $order->get_items();
+            foreach ($items as $item) {
+                try {
+                    $product_id = intval($item->get_product_id());
+                    if ($product_id <= 0) continue;
+                } catch (\Exception $e) {
+                    continue; // Skip invalid items
+                }
+                
+                // Skip excluded products
+                if (in_array($product_id, $this->excluded_products)) {
+                    continue;
+                }
+                
+                // Check if it's a membership product
+                $found_member_type = $this->get_member_type_from_product_id($product_id);
+                if ($found_member_type) {
+                    $customer_member_type = $found_member_type;
+                    
+                    // Check if this order has active subscriptions
+                    $subscriptions = wcs_get_subscriptions_for_order($order->get_id());
+                    
+                    if (!empty($subscriptions)) {
+                        // Has subscription - check if active on target date
+                        foreach ($subscriptions as $subscription) {
+                            if ($this->is_subscription_active_on_date($subscription, $target_date)) {
+                                $is_active = true;
+                                break 2; // Break both loops
+                            }
+                        }
+                    } else {
+                        // No subscription - check if manual membership bought within last year
+                        if ($order_date >= $one_year_ago && $order_date <= $target_date) {
+                            $is_active = true;
+                            break;
+                        }
+                    }
+                }
+            }
+            
+            // Add to active members if criteria met
+            if ($is_active && ($member_type === '' || $customer_member_type === $member_type)) {
+                $active_members[$customer_id] = [
+                    'member_type' => $customer_member_type,
+                    'customer_id' => $customer_id
+                ];
+            }
+        }
+        
+        // Return count by specific member type if requested
+        if ($member_type !== '') {
+            return count(array_filter($active_members, function($member) use ($member_type) {
+                return $member['member_type'] === $member_type;
+            }));
+        }
+        
+        // Group by member type
+        $counts = ['total' => 0, 'private' => 0, 'pension' => 0, 'union' => 0];
+        
+        foreach ($active_members as $member) {
+            $type = $member['member_type'];
+            if (isset($counts[$type])) {
+                $counts[$type]++;
+                $counts['total']++;
+            }
+        }
+        
+        return $counts;
+    }
+
+    /**
+     * Check if a subscription is active on a specific date
+     * 
+     * @param WC_Subscription $subscription The subscription object
+     * @param DateTime $target_date The date to check
+     * @return bool True if subscription is active on target date
+     */
+    private function is_subscription_active_on_date($subscription, $target_date) {
+        if (!$subscription || !method_exists($subscription, 'get_status')) {
+            return false;
+        }
+        
+        $status = $subscription->get_status();
+        
+        // Only active and pending-cancel subscriptions count as active
+        if (!in_array($status, ['active', 'pending-cancel'])) {
+            return false;
+        }
+        
+        $start_date = $subscription->get_date('start');
+        $end_date = $subscription->get_date('end');
+        
+        if (!$start_date) return false;
+        
+        $start_dt = new \DateTime($start_date);
+        
+        // Must have started before or on target date
+        if ($start_dt > $target_date) {
+            return false;
+        }
+        
+        // If no end date, subscription is ongoing
+        if (!$end_date) {
+            return true;
+        }
+        
+        $end_dt = new \DateTime($end_date);
+        
+        // Must not have ended before target date
+        return $end_dt >= $target_date;
+    }
+
+    /**
+     * Get member type from product ID
+     * 
+     * @param int $product_id The product ID
+     * @return string|false Member type or false if not a membership product
+     */
+    private function get_member_type_from_product_id($product_id) {
+        foreach ($this->member_types as $type => $products) {
+            if (in_array($product_id, $products)) {
+                return $type;
+            }
+        }
+        return false;
+    }
 }

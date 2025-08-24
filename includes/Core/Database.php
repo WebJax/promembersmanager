@@ -654,21 +654,37 @@ class Database {
             $type_filter_sql = " AND membership_type IN ($ids_list) ";
         }
 
+        // Prepare default zeroed counters
+        $counts = [
+            'total' => 0,
+            'private' => 0,
+            'pension' => 0,
+            'union' => 0
+        ];
+
+        // Quick sanity check: if table has no rows, return zeros
+        $row_count = (int) $wpdb->get_var("SELECT COUNT(*) FROM $members_table");
+        if ($row_count === 0) {
+            error_log('Pro Members Manager - membership metadata table is empty.');
+            // Signal to caller that metadata table is empty so callers can fallback
+            return null;
+        }
+
         // Count rows where membership was active on that day
-        // active if start_date <= day_end AND (end_date is empty/0000-00-00 or end_date >= day_start) and membership_status = 'active'
-        $end_condition = "(end_date IS NULL OR end_date = '' OR end_date = '0000-00-00 00:00:00' OR end_date >= %s)";
+        // Use STR_TO_DATE to safely parse stored date strings and avoid incorrect DATETIME errors
+        $end_condition = "(end_date IS NULL OR end_date = '' OR end_date = '0000-00-00 00:00:00' OR STR_TO_DATE(end_date, '%Y-%m-%d %H:%i:%s') >= STR_TO_DATE(%s, '%Y-%m-%d %H:%i:%s'))";
 
         $sql = "SELECT membership_type, COUNT(*) as cnt FROM $members_table
             WHERE membership_status = 'active'
-            AND start_date <= %s
+            AND STR_TO_DATE(start_date, '%Y-%m-%d %H:%i:%s') <= STR_TO_DATE(%s, '%Y-%m-%d %H:%i:%s')
             AND " . $end_condition . " 
             {$type_filter_sql}
             GROUP BY membership_type";
 
-    // Prepare with day_end and day_start placed into the start_date and end_date comparisons
-    // start_date <= %s  -> use day_end
-    // end_date >= %s    -> use day_start
-    $sql = $wpdb->prepare($sql, $day_end, $day_start);
+        // Prepare with day_end and day_start placed into the start_date and end_date comparisons
+        // STR_TO_DATE(start_date) <= %s  -> use day_end
+        // STR_TO_DATE(end_date) >= %s    -> use day_start
+        $sql = $wpdb->prepare($sql, $day_end, $day_start);
 
         $rows = $wpdb->get_results($sql, ARRAY_A);
 
