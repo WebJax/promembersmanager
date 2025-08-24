@@ -330,68 +330,122 @@ class Database {
         
         $members_table = $wpdb->prefix . 'pmm_membership_metadata';
         
-        // Get count of private memberships
+        // Define membership product groups
+        $private_ids = [9503, 10968];
+        $pension_ids = [28736, 28735];
+        $union_ids = [19221, 30734];
+
+        // If a specific member_type filter is provided, narrow which IDs to include
+        $filter_ids = [];
+        if (!empty($args['member_type'])) {
+            switch ($args['member_type']) {
+                case 'private':
+                    $filter_ids = $private_ids;
+                    break;
+                case 'pension':
+                    $filter_ids = $pension_ids;
+                    break;
+                case 'union':
+                    $filter_ids = $union_ids;
+                    break;
+                default:
+                    $filter_ids = array_merge($private_ids, $pension_ids, $union_ids);
+            }
+        }
+
+        // Helper to build IN list
+        $all_private_list = implode(',', array_map('intval', $private_ids));
+        $all_pension_list = implode(',', array_map('intval', $pension_ids));
+        $all_union_list = implode(',', array_map('intval', $union_ids));
+        $filter_list = !empty($filter_ids) ? implode(',', array_map('intval', $filter_ids)) : '';
+
+        // Get count of private memberships (excluding pension)
+        $private_where = "membership_type IN ($all_private_list)";
+        if ($filter_list !== '') {
+            // further restrict to the filtered IDs
+            $private_where .= " AND membership_type IN ($filter_list)";
+        }
+
         $private_sql = $wpdb->prepare(
             "SELECT COUNT(*) FROM $members_table 
-            WHERE membership_type IN ('9503', '10968', '28736', '28735') 
+            WHERE {$private_where} 
             AND membership_status = 'active'
             AND created_at BETWEEN %s AND %s",
             $args['from_date'], $args['to_date']
         );
-        
+
         $count_privatememberships = (int) $wpdb->get_var($private_sql);
         
         // Get count of union memberships
+        $union_where = "membership_type IN ($all_union_list)";
+        if ($filter_list !== '') {
+            $union_where .= " AND membership_type IN ($filter_list)";
+        }
+
         $union_sql = $wpdb->prepare(
             "SELECT COUNT(*) FROM $members_table 
-            WHERE membership_type IN ('19221', '30734') 
+            WHERE {$union_where} 
             AND membership_status = 'active'
             AND created_at BETWEEN %s AND %s",
             $args['from_date'], $args['to_date']
         );
-        
+
         $count_unionmemberships = (int) $wpdb->get_var($union_sql);
         
-        // Get count of pension memberships
+        // Get count of pension memberships (manual and auto)
+        $pension_manual_where = "membership_type = 28735";
+        $pension_auto_where = "membership_type = 28736";
+        if ($filter_list !== '') {
+            $pension_manual_where .= " AND membership_type IN ($filter_list)";
+            $pension_auto_where .= " AND membership_type IN ($filter_list)";
+        }
+
         $pension_manual_sql = $wpdb->prepare(
             "SELECT COUNT(*) FROM $members_table 
-            WHERE membership_type = '28735'
+            WHERE {$pension_manual_where}
             AND membership_status = 'active'
             AND created_at BETWEEN %s AND %s",
             $args['from_date'], $args['to_date']
         );
-        
+
         $count_pension_manual_memberships = (int) $wpdb->get_var($pension_manual_sql);
-        
+
         $pension_auto_sql = $wpdb->prepare(
             "SELECT COUNT(*) FROM $members_table 
-            WHERE membership_type = '28736'
+            WHERE {$pension_auto_where}
             AND membership_status = 'active'
             AND created_at BETWEEN %s AND %s",
             $args['from_date'], $args['to_date']
         );
-        
+
         $count_pension_auto_memberships = (int) $wpdb->get_var($pension_auto_sql);
         
         // Get count of private memberships (manual and auto)
+        $private_manual_where = "membership_type = 10968";
+        $private_auto_where = "membership_type = 9503";
+        if ($filter_list !== '') {
+            $private_manual_where .= " AND membership_type IN ($filter_list)";
+            $private_auto_where .= " AND membership_type IN ($filter_list)";
+        }
+
         $private_manual_sql = $wpdb->prepare(
             "SELECT COUNT(*) FROM $members_table 
-            WHERE membership_type = '10968'
+            WHERE {$private_manual_where}
             AND membership_status = 'active'
             AND created_at BETWEEN %s AND %s",
             $args['from_date'], $args['to_date']
         );
-        
+
         $count_private_manual_memberships = (int) $wpdb->get_var($private_manual_sql);
-        
+
         $private_auto_sql = $wpdb->prepare(
             "SELECT COUNT(*) FROM $members_table 
-            WHERE membership_type = '9503'
+            WHERE {$private_auto_where}
             AND membership_status = 'active'
             AND created_at BETWEEN %s AND %s",
             $args['from_date'], $args['to_date']
         );
-        
+
         $count_private_auto_memberships = (int) $wpdb->get_var($private_auto_sql);
         
         // Get count of union memberships in Dianalund
@@ -557,5 +611,97 @@ class Database {
         }
         // Return the growth data
         return $periods;
+    }
+
+    /**
+     * Get active member counts on a specific date
+     *
+     * @param string $date Date in 'Y-m-d' format
+     * @param string $member_type Optional. 'private', 'pension', 'union' or empty for all.
+     * @return array Associative counts: ['total'=>int, 'private'=>int, 'pension'=>int, 'union'=>int]
+     */
+    public function get_active_members_count_on($date, $member_type = '') {
+        global $wpdb;
+
+        $members_table = $wpdb->prefix . 'pmm_membership_metadata';
+
+        // Normalize date bounds for the day
+        $day_start = $date . ' 00:00:00';
+        $day_end = $date . ' 23:59:59';
+
+        // Define membership product groups
+        $private_ids = [9503, 10968];
+        $pension_ids = [28736, 28735];
+        $union_ids = [19221, 30734];
+
+        // Optionally restrict to a member_type
+        $type_filter_sql = '';
+        if (!empty($member_type)) {
+            switch ($member_type) {
+                case 'private':
+                    $ids = $private_ids;
+                    break;
+                case 'pension':
+                    $ids = $pension_ids;
+                    break;
+                case 'union':
+                    $ids = $union_ids;
+                    break;
+                default:
+                    $ids = array_merge($private_ids, $pension_ids, $union_ids);
+            }
+            $ids_list = implode(',', array_map('intval', $ids));
+            $type_filter_sql = " AND membership_type IN ($ids_list) ";
+        }
+
+        // Count rows where membership was active on that day
+        // active if start_date <= day_end AND (end_date is empty/0000-00-00 or end_date >= day_start) and membership_status = 'active'
+        $end_condition = "(end_date IS NULL OR end_date = '' OR end_date = '0000-00-00 00:00:00' OR end_date >= %s)";
+
+        $sql = "SELECT membership_type, COUNT(*) as cnt FROM $members_table
+            WHERE membership_status = 'active'
+            AND start_date <= %s
+            AND " . $end_condition . " 
+            {$type_filter_sql}
+            GROUP BY membership_type";
+
+    // Prepare with day_end and day_start placed into the start_date and end_date comparisons
+    // start_date <= %s  -> use day_end
+    // end_date >= %s    -> use day_start
+    $sql = $wpdb->prepare($sql, $day_end, $day_start);
+
+        $rows = $wpdb->get_results($sql, ARRAY_A);
+
+        $counts = [
+            'total' => 0,
+            'private' => 0,
+            'pension' => 0,
+            'union' => 0
+        ];
+
+        if ($rows) {
+            foreach ($rows as $row) {
+                $mid = intval($row['membership_type']);
+                $cnt = intval($row['cnt']);
+                $counts['total'] += $cnt;
+                if (in_array($mid, $private_ids)) {
+                    $counts['private'] += $cnt;
+                } elseif (in_array($mid, $pension_ids)) {
+                    $counts['pension'] += $cnt;
+                } elseif (in_array($mid, $union_ids)) {
+                    $counts['union'] += $cnt;
+                } else {
+                    // Unknown types are added to total but not bucketed
+                    $counts['total'] += 0; // already added
+                }
+            }
+        }
+
+        // Diagnostic logging when counts are zero for visibility during debugging
+        if ($counts['total'] === 0) {
+            error_log('Pro Members Manager - get_active_members_count_on(' . $date . ") returned zero. SQL: " . $sql . " Rows: " . json_encode($rows));
+        }
+
+        return $counts;
     }
 }

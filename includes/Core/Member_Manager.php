@@ -594,9 +594,20 @@ class Member_Manager {
             'limit' => -1 // Get all orders
         ];
         
-        // Add date filters if specified
+        // Add date filters if specified. Normalize plain dates (Y-m-d) to full-day datetimes
         if (!empty($args['from_date']) && !empty($args['to_date'])) {
-            $query_args['date_paid'] = $args['from_date'] . '...' . $args['to_date'];
+            $from = $args['from_date'];
+            $to = $args['to_date'];
+
+            // If caller provided just a date (length 10), expand to include full day
+            if (is_string($from) && strlen($from) === 10 && preg_match('/^\d{4}-\d{2}-\d{2}$/', $from)) {
+                $from = $from . ' 00:00:00';
+            }
+            if (is_string($to) && strlen($to) === 10 && preg_match('/^\d{4}-\d{2}-\d{2}$/', $to)) {
+                $to = $to . ' 23:59:59';
+            }
+
+            $query_args['date_paid'] = $from . '...' . $to;
         }
         
         try {
